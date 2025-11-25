@@ -64,9 +64,6 @@ export default function App() {
   const [metrics, setMetrics] = useState<Record<string, any>>({});
   const [cost, setCost] = useState<Record<string, any>>({ total: 0, breakdown: {} });
   const [debugText, setDebugText] = useState<string[]>([]);
-  const [micStatus, setMicStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
-  const [wsStatus, setWsStatus] = useState<'connecting' | 'open' | 'closed'>('connecting');
-  const [imageStatus, setImageStatus] = useState<'idle' | 'generating'>('idle');
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
