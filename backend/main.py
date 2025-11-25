@@ -11,6 +11,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
 
+# Compatibility shim: importlib.metadata on Python 3.9 lacks packages_distributions
+try:
+    import importlib.metadata as _md
+    if not hasattr(_md, "packages_distributions"):
+        import importlib_metadata as _md_backport  # type: ignore
+        _md.packages_distributions = _md_backport.packages_distributions
+except Exception as e:
+    print(f"Importlib metadata shim failed: {e}")
+
 from .processors import get_audio_processor
 from .generators import get_image_generator
 from .instrumentation import instrumentation
