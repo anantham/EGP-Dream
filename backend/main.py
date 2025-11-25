@@ -174,23 +174,28 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Trigger export and send back URL
                 zip_path = await state.session.export_zip()
                 await websocket.send_json({
-                    "type": "status",
-                    "message": "Session exported ready."
+                    "type": "export_ready",
+                    "path": f"/api/export?session_name={state.session.session_name}",
+                    "message": "Session export ready."
                 })
-                # In a real app, we'd send a download link, but here we rely on the known endpoint
-                # or the button in UI that calls /api/export
 
     except WebSocketDisconnect:
         print("Client disconnected")
-        # Flush audio buffer
-        if hasattr(state.audio_processor, 'flush'):
-             final_questions = await state.audio_processor.flush()
-             if final_questions:
-                 print(f"Flushed Questions: {final_questions}")
-                 # We can't send them to closed socket, but we log them
     except Exception as e:
         print(f"WebSocket Error: {e}")
     finally:
+        # Flush any buffered audio and close network resources
+        if hasattr(state.audio_processor, 'flush'):
+            try:
+                await state.audio_processor.flush()
+            except Exception as e:
+                print(f"Flush error: {e}")
+        if hasattr(state.audio_processor, 'close'):
+            try:
+                await state.audio_processor.close()
+            except Exception as e:
+                print(f"Close error: {e}")
+
         display_task.cancel()
         generator_task.cancel()
 

@@ -109,6 +109,15 @@ class AudioProcessor(ABC):
     def set_question_model(self, model_name: str):
         pass
 
+    # Optional lifecycle hooks for buffered/network processors
+    async def flush(self) -> str:
+        """Flush any buffered audio and return pending questions."""
+        return ""
+
+    async def close(self):
+        """Cleanup network resources."""
+        return
+
 # 1. Local Whisper (Streaming)
 class LocalWhisperProcessor(AudioProcessor):
     def __init__(self):
@@ -228,40 +237,40 @@ class OpenAIRealtimeProcessor(AudioProcessor):
 
     async def process_audio(self, audio_data: np.ndarray) -> str:
         await self.ensure_connection()
-        if not self.ws: return ""
-        
         start_time = instrumentation.start_timer()
         duration = len(audio_data) / 16000.0
         pricing.track_audio(self.model_name, duration)
-        
-        # Send Audio
-        pcm_base64 = base64.b64encode(self._float32_to_pcm16(audio_data)).decode('utf-8')
-        await self.ws.send(json.dumps({
-            "type": "input_audio_buffer.append",
-            "audio": pcm_base64
-        }))
-        
-        # Poll for transcription events (non-blocking try)
         try:
-            while True:
-                # Minimal timeout to drain buffer
-                msg = await asyncio.wait_for(self.ws.recv(), timeout=0.01)
-                event = json.loads(msg)
-                
-                if event['type'] == 'conversation.item.input_audio_transcription.completed':
-                    transcript = event.get('transcript', '')
-                    if transcript:
-                        self.accumulated_text += " " + transcript
-                        self.accumulated_text = self.accumulated_text.strip()
-                        
-        except asyncio.TimeoutError:
-            pass # No new messages
-        except Exception as e:
-            print(f"Realtime Recv Error: {e}")
+            if not self.ws:
+                return ""
+            
+            # Send Audio
+            pcm_base64 = base64.b64encode(self._float32_to_pcm16(audio_data)).decode('utf-8')
+            await self.ws.send(json.dumps({
+                "type": "input_audio_buffer.append",
+                "audio": pcm_base64
+            }))
+            
+            # Poll for transcription events (non-blocking try)
+            try:
+                while True:
+                    msg = await asyncio.wait_for(self.ws.recv(), timeout=0.01)
+                    event = json.loads(msg)
+                    
+                    if event['type'] == 'conversation.item.input_audio_transcription.completed':
+                        transcript = event.get('transcript', '')
+                        if transcript:
+                            self.accumulated_text += " " + transcript
+                            self.accumulated_text = self.accumulated_text.strip()
+                            
+            except asyncio.TimeoutError:
+                pass # No new messages
+            except Exception as e:
+                print(f"Realtime Recv Error: {e}")
+            
+        finally:
+            instrumentation.end_timer(start_time, "Phase A", "openai_realtime")
         
-        instrumentation.end_timer(start_time, "Phase A", "openai_realtime")
-        
-        # Check for questions (Phase B)
         current_text = self.accumulated_text
         if len(current_text) - len(self.last_check_text) > 20 or '?' in current_text[len(self.last_check_text):]:
             self.last_check_text = current_text
@@ -275,6 +284,14 @@ class OpenAIRealtimeProcessor(AudioProcessor):
             return questions
             
         return ""
+
+    async def close(self):
+        if self.ws and not self.ws.closed:
+            try:
+                await self.ws.close()
+            except Exception as e:
+                print(f"Failed to close OpenAI Realtime socket: {e}")
+        self.ws = None
 
 # 3. Cloud Batched (Gemini Native / OpenAI REST)
 class CloudBatchedProcessor(AudioProcessor):
@@ -321,12 +338,23 @@ class CloudBatchedProcessor(AudioProcessor):
             return await self._send_to_cloud(audio_np)
         return ""
 
+    async def flush(self) -> str:
+        """Send any remaining buffered audio."""
+        if not self.buffer and not self.prev_tail:
+            return ""
+        full_audio_list = self.prev_tail + self.buffer
+        self.buffer = []
+        self.prev_tail = []
+        audio_np = np.array(full_audio_list, dtype=np.float32)
+        return await self._send_to_cloud(audio_np)
+
     async def _send_to_cloud(self, audio_np: np.ndarray) -> str:
         wav_data = self._numpy_to_wav(audio_np)
         duration = len(audio_np) / 16000.0
         pricing.track_audio(self.mode, duration)
         
         start_time = instrumentation.start_timer()
+        timer_recorded = False
         
         try:
             if "gemini" in self.mode:
@@ -340,6 +368,7 @@ class CloudBatchedProcessor(AudioProcessor):
                 ])
                 result = response.text.strip()
                 instrumentation.end_timer(start_time, "Phase A+B", "gemini_native")
+                timer_recorded = True
                 return "" if result == "NO" else result
 
             elif "openai_rest_whisper" in self.mode:
@@ -358,28 +387,34 @@ class CloudBatchedProcessor(AudioProcessor):
                 )
                 text = transcript_resp.text
                 instrumentation.end_timer(start_time, "Phase A", "openai_whisper_rest")
+                timer_recorded = True
                 
                 if not text: return ""
                 
                 # 2. Extract Questions (Phase B) - Using whatever default or hardcoded model?
                 # For simplicity, let's use GPT-4o-mini for this part
                 start_b = instrumentation.start_timer()
-                extract_resp = await self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "Extract questions from transcript. Separated by ||| or return NO."},
-                        {"role": "user", "content": text}
-                    ]
-                )
-                questions = extract_resp.choices[0].message.content.strip()
-                instrumentation.end_timer(start_b, "Phase B", "gpt-4o-mini")
+                try:
+                    extract_resp = await self.client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "Extract questions from transcript. Separated by ||| or return NO."},
+                            {"role": "user", "content": text}
+                        ]
+                    )
+                    questions = extract_resp.choices[0].message.content.strip()
+                finally:
+                    instrumentation.end_timer(start_b, "Phase B", "gpt-4o-mini")
                 
                 return "" if questions == "NO" else questions
 
         except Exception as e:
             print(f"Cloud Batched Error ({self.mode}): {e}")
             return ""
-            
+        finally:
+            # If the branch didn't record a timer, record an error outcome to avoid silent drops
+            if not timer_recorded:
+                instrumentation.end_timer(start_time, "Phase A+B", f"{self.mode}_error")
         return ""
 
 def get_audio_processor(mode: str) -> AudioProcessor:

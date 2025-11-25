@@ -2,18 +2,22 @@ import time
 import json
 import os
 import asyncio
+import threading
+from pathlib import Path
 from collections import defaultdict
 import statistics
 
-METRICS_FILE = "metrics.json"
+BASE_DIR = Path(__file__).resolve().parent
+METRICS_FILE = BASE_DIR / "metrics.json"
 
 class Instrumentation:
     def __init__(self):
         self.metrics = defaultdict(list)
+        self._write_counter = 0
         self.load_metrics()
 
     def load_metrics(self):
-        if os.path.exists(METRICS_FILE):
+        if METRICS_FILE.exists():
             try:
                 with open(METRICS_FILE, 'r') as f:
                     data = json.load(f)
@@ -26,26 +30,19 @@ class Instrumentation:
                 self.metrics = defaultdict(list)
 
     def save_metrics(self):
-        # Sync wrapper for now, but main.py calls this via side-effect?
-        # Ideally we should not block. We will use a fire-and-forget thread approach internally
-        # or just rely on the fact that we call this less frequently.
-        # But end_timer calls it EVERY TIME.
-        
-        # Simple optimization: Only save every 10 samples or use background task
-        # For simplicity/safety, let's just do a quick fire-and-forget write
-        asyncio.create_task(self._async_save())
-
-    async def _async_save(self):
-        try:
-            await asyncio.to_thread(self._write_file)
-        except Exception as e:
-            print(f"Metrics save failed: {e}")
-
-    def _write_file(self):
         try:
             with open(METRICS_FILE, 'w') as f:
                 json.dump(dict(self.metrics), f)
-        except: pass
+        except Exception as e:
+            print(f"Metrics save failed: {e}")
+
+    def _schedule_save(self):
+        # Try to use the running loop; if none, fall back to a background thread
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(asyncio.to_thread(self.save_metrics))
+        except RuntimeError:
+            threading.Thread(target=self.save_metrics, daemon=True).start()
 
     def start_timer(self):
         return time.perf_counter()
@@ -58,14 +55,10 @@ class Instrumentation:
         if len(self.metrics[key]) > 100:
             self.metrics[key].pop(0)
             
-        # Trigger non-blocking save
-        # We need a running loop. If called from sync context, this might fail.
-        # But our app is fully async.
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self._async_save())
-        except RuntimeError:
-            pass # No loop running (e.g. unit test)
+        # Throttle disk writes to every 5 samples
+        self._write_counter += 1
+        if self._write_counter % 5 == 0:
+            self._schedule_save()
             
         return duration
 
