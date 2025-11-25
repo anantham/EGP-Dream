@@ -20,7 +20,6 @@ class QuestionExtractor(ABC):
     @abstractmethod
     async def extract(self, text: str) -> str:
         pass
-    
     @abstractmethod
     def update_config(self, config: dict):
         pass
@@ -31,7 +30,7 @@ class NativeGeminiExtractor(QuestionExtractor):
         self.model = genai.GenerativeModel(model_name)
 
     def update_config(self, config: dict):
-        if 'gemini_api_key' in config:
+        if 'gemini_api_key' in config and config['gemini_api_key']:
             genai.configure(api_key=config['gemini_api_key'])
 
     async def extract(self, text: str) -> str:
