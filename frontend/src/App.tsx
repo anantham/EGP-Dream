@@ -327,6 +327,17 @@ export default function App() {
                  </div>
               </div>
 
+              <div className="flex items-center justify-between bg-white/5 p-4 rounded-lg">
+                <div>
+                  <h3 className="text-sm font-bold text-white/70">DEBUG TRANSCRIPTS</h3>
+                  <p className="text-xs text-white/40">When enabled, backend can emit raw transcript snippets to the Debug panel.</p>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={showDebug} onChange={e => setShowDebug(e.target.checked)} />
+                  <span className="text-white/80">Enable</span>
+                </label>
+              </div>
+
               <div className="space-y-4">
                 <h3 className="text-sm font-bold text-white/70">API KEYS</h3>
                 <input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder="Gemini API Key" className="w-full bg-black/50 border border-white/10 rounded p-3" />
