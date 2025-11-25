@@ -9,11 +9,11 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Audio Models (Phase A or Phase A+B)
 AUDIO_MODELS = {
-    "local_whisper": "Local Whisper (TheWhisper) - Streaming",
-    "gemini_flash_audio": "Gemini 2.5 Flash (Native) - Batched (6s)",
-    "openai_realtime_4o": "GPT-4o Realtime (WebSocket) - Streaming",
-    "openai_realtime_mini": "GPT-4o Mini Realtime (WebSocket) - Streaming",
-    "openai_rest_whisper": "Whisper V1 (REST) - Batched (6s)",
+    "local_whisper": "Local Whisper (TheWhisper) - Streaming (low latency)",
+    "gemini_flash_audio": "Gemini 2.5 Flash (Native) - Batched ~4-6s, overlapping for completeness",
+    "openai_realtime_4o": "GPT-4o Realtime (WebSocket) - Streaming (lowest latency)",
+    "openai_realtime_mini": "GPT-4o Mini Realtime (WebSocket) - Streaming (low latency, cheaper)",
+    "openai_rest_whisper": "Whisper V1 (REST) - Batched ~4-6s (slower, simpler)",
 }
 
 # Question Models (Phase B)

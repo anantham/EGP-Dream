@@ -183,6 +183,8 @@ class OpenAIRealtimeProcessor(AudioProcessor):
         self.model_name = model_name
         self.api_key = None
         self.ws = None
+        self.listener_task = None
+        self.transcript_queue = asyncio.Queue(maxsize=10)
         self.extractor = NativeGeminiExtractor() 
         self.accumulated_text = ""
         self.last_check_text = ""
@@ -224,16 +226,33 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                     }
                 }
             }))
-            
-            # Start listener loop in background? 
-            # For simplicity in this sync-ish flow, we might lose async responses if we don't poll.
-            # But process_audio is called frequently. We can poll messages there.
+            # Start dedicated listener
+            self.listener_task = asyncio.create_task(self._listen_loop())
             
         except Exception as e:
             print(f"Realtime Connection Failed: {e}")
 
     def _float32_to_pcm16(self, audio_np: np.ndarray) -> bytes:
         return (audio_np * 32767).astype(np.int16).tobytes()
+
+    async def _listen_loop(self):
+        try:
+            while self.ws and not self.ws.closed:
+                msg = await self.ws.recv()
+                event = json.loads(msg)
+                if event.get('type') == 'conversation.item.input_audio_transcription.completed':
+                    transcript = event.get('transcript', '')
+                    if transcript:
+                        # Backpressure: drop oldest if full
+                        if self.transcript_queue.full():
+                            try:
+                                self.transcript_queue.get_nowait()
+                                self.transcript_queue.task_done()
+                            except asyncio.QueueEmpty:
+                                pass
+                        await self.transcript_queue.put(transcript)
+        except Exception as e:
+            print(f"Realtime listener error: {e}")
 
     async def process_audio(self, audio_data: np.ndarray) -> str:
         await self.ensure_connection()
@@ -250,23 +269,15 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                 "type": "input_audio_buffer.append",
                 "audio": pcm_base64
             }))
-            
-            # Poll for transcription events (non-blocking try)
-            try:
-                while True:
-                    msg = await asyncio.wait_for(self.ws.recv(), timeout=0.01)
-                    event = json.loads(msg)
-                    
-                    if event['type'] == 'conversation.item.input_audio_transcription.completed':
-                        transcript = event.get('transcript', '')
-                        if transcript:
-                            self.accumulated_text += " " + transcript
-                            self.accumulated_text = self.accumulated_text.strip()
-                            
-            except asyncio.TimeoutError:
-                pass # No new messages
-            except Exception as e:
-                print(f"Realtime Recv Error: {e}")
+            # Drain any transcripts collected by listener
+            while True:
+                try:
+                    transcript = self.transcript_queue.get_nowait()
+                    self.accumulated_text += " " + transcript
+                    self.accumulated_text = self.accumulated_text.strip()
+                    self.transcript_queue.task_done()
+                except asyncio.QueueEmpty:
+                    break
             
         finally:
             instrumentation.end_timer(start_time, "Phase A", "openai_realtime")
@@ -292,14 +303,18 @@ class OpenAIRealtimeProcessor(AudioProcessor):
             except Exception as e:
                 print(f"Failed to close OpenAI Realtime socket: {e}")
         self.ws = None
+        if self.listener_task:
+            self.listener_task.cancel()
+            self.listener_task = None
 
 # 3. Cloud Batched (Gemini Native / OpenAI REST)
 class CloudBatchedProcessor(AudioProcessor):
     def __init__(self, mode="gemini_flash_audio"):
         self.mode = mode
         self.buffer = []
-        self.chunk_limit = 16000 * 6 
-        self.overlap_size = 16000 * 2 
+        # Shorter chunks with overlap to improve completeness without waiting long
+        self.chunk_limit = 16000 * 4  # ~4s
+        self.overlap_size = 16000 * 2  # 2s overlap
         self.prev_tail = []
         self.client = None # For OpenRouter/OpenAI REST
         self.api_keys = {}
