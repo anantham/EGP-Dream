@@ -4,11 +4,11 @@ import { Mic, Pause, Settings as SettingsIcon, X, List, Activity, Clock, Downloa
 const SAMPLE_RATE = 16000;
 
 const AUDIO_MODELS = [
-  { id: "local_whisper", name: "Local Whisper (TheWhisper) - Streaming" },
-  { id: "gemini_flash_audio", name: "Gemini 2.5 Flash (Native) - Batched (6s)" },
-  { id: "openai_realtime_4o", name: "GPT-4o Realtime (WebSocket) - Streaming" },
-  { id: "openai_realtime_mini", name: "GPT-4o Mini Realtime (WebSocket) - Streaming" },
-  { id: "openai_rest_whisper", name: "Whisper V1 (REST) - Batched (6s)" }
+  { id: "local_whisper", name: "Local Whisper (TheWhisper) - Streaming (low latency)" },
+  { id: "gemini_flash_audio", name: "Gemini 2.5 Flash (Native) - Batched ~4-6s (overlap)" },
+  { id: "openai_realtime_4o", name: "GPT-4o Realtime (WebSocket) - Streaming (lowest latency)" },
+  { id: "openai_realtime_mini", name: "GPT-4o Mini Realtime (WebSocket) - Streaming (low latency, cheaper)" },
+  { id: "openai_rest_whisper", name: "Whisper V1 (REST) - Batched ~4-6s (slower)" }
 ];
 
 const QUESTION_MODELS = [
@@ -131,6 +131,36 @@ export default function App() {
         audioModel, questionModel, imageModel, minDisplayTime, sessionName
       }));
     }
+  };
+
+  // Metrics-aware labeling
+  const formatLatencyLabel = (seconds: any) => {
+    if (seconds === undefined || seconds === null) return '';
+    const ms = Math.round(Number(seconds) * 1000);
+    return `• ${ms} ms avg`;
+  };
+
+  const audioMetricMap: Record<string, string> = {
+    local_whisper: "Phase A:local_whisper",
+    gemini_flash_audio: "Phase A+B:gemini_native",
+    openai_rest_whisper: "Phase A:openai_whisper_rest",
+    openai_realtime_4o: "Phase A:openai_realtime",
+    openai_realtime_mini: "Phase A:openai_realtime",
+  };
+
+  const decorateAudioName = (id: string, name: string) => {
+    const key = audioMetricMap[id];
+    return key ? `${name} ${formatLatencyLabel(metrics[key])}` : name;
+  };
+
+  const decorateQuestionName = (id: string, name: string) => {
+    const key = `Phase B:${id}`;
+    return `${name} ${formatLatencyLabel(metrics[key])}`.trim();
+  };
+
+  const decorateImageName = (id: string, name: string) => {
+    const key = `Phase C:${id}`;
+    return `${name} ${formatLatencyLabel(metrics[key])}`.trim();
   };
 
   const handleSaveSettings = () => {
@@ -289,15 +319,21 @@ export default function App() {
               <div className="grid grid-cols-1 gap-6">
                   <div className="space-y-2">
                     <h3 className="text-sm font-bold text-white/70">PHASE A: AUDIO PIPELINE</h3>
-                    <select value={audioModel} onChange={e => setAudioModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-3 text-sm">{AUDIO_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
+                    <select value={audioModel} onChange={e => setAudioModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-3 text-sm">
+                      {AUDIO_MODELS.map(m => <option key={m.id} value={m.id}>{decorateAudioName(m.id, m.name)}</option>)}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <h3 className="text-sm font-bold text-white/70">PHASE B: QUESTION MODEL</h3>
-                    <select value={questionModel} onChange={e => setQuestionModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-3 text-sm">{QUESTION_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
+                    <select value={questionModel} onChange={e => setQuestionModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-3 text-sm">
+                      {QUESTION_MODELS.map(m => <option key={m.id} value={m.id}>{decorateQuestionName(m.id, m.name)}</option>)}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <h3 className="text-sm font-bold text-white/70">PHASE C: IMAGE GENERATOR</h3>
-                    <select value={imageModel} onChange={e => setImageModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-3 text-sm">{IMAGE_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
+                    <select value={imageModel} onChange={e => setImageModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-3 text-sm">
+                      {IMAGE_MODELS.map(m => <option key={m.id} value={m.id}>{decorateImageName(m.id, m.name)}</option>)}
+                    </select>
                   </div>
               </div>
               
