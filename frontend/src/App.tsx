@@ -39,6 +39,9 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [micStatus, setMicStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  const [wsStatus, setWsStatus] = useState<'connecting' | 'open' | 'closed'>('connecting');
+  const [imageStatus, setImageStatus] = useState<'idle' | 'generating'>('idle');
   
   // Config
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('gemini_api_key') || '');
@@ -61,6 +64,7 @@ export default function App() {
   const [metrics, setMetrics] = useState<Record<string, any>>({});
   const [cost, setCost] = useState<Record<string, any>>({ total: 0, breakdown: {} });
   const [debugText, setDebugText] = useState<string[]>([]);
+  const [debugText, setDebugText] = useState<string[]>([]);
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -75,17 +79,18 @@ export default function App() {
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:8000/ws');
     ws.onopen = () => {
-      console.log('Connected');
+      setWsStatus('open');
       setStatus('Connected');
       sendConfig(ws);
       setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'get_metrics' })); }, 5000);
     };
+    ws.onerror = () => setWsStatus('closed');
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'image') {
         setLiveImage(data.url);
         setLivePrompt(data.prompt);
-        // If we are in live mode, we stay in live mode and see the new image
+        setImageStatus('idle');
       } 
       else if (data.type === 'history_update') {
         setHistory(prev => [...prev, data.item]);
@@ -99,7 +104,7 @@ export default function App() {
         setCost(data.data.cost || { total: 0, breakdown: {} });
       }
     };
-    ws.onclose = () => setStatus('Disconnected');
+    ws.onclose = () => { setStatus('Disconnected'); setWsStatus('closed'); };
     wsRef.current = ws;
     return () => ws.close();
   }, []);
@@ -159,15 +164,20 @@ export default function App() {
     return key ? `${name} ${formatLatencyLabel(metrics[key])}` : name;
   };
 
-  const decorateQuestionName = (id: string, name: string) => {
-    const key = `Phase B:${id}`;
-    return `${name} ${formatLatencyLabel(metrics[key])}`.trim();
-  };
+const decorateQuestionName = (id: string, name: string) => {
+  const key = `Phase B:${id}`;
+  return `${name} ${formatLatencyLabel(metrics[key])}`.trim();
+};
 
-  const decorateImageName = (id: string, name: string) => {
-    const key = `Phase C:${id}`;
-    return `${name} ${formatLatencyLabel(metrics[key])}`.trim();
-  };
+const decorateImageName = (id: string, name: string) => {
+  const key = `Phase C:${id}`;
+  return `${name} ${formatLatencyLabel(metrics[key])}`.trim();
+};
+
+const statusDot = (state: 'ok' | 'warn' | 'err') => {
+  const color = state === 'ok' ? 'bg-green-400' : state === 'warn' ? 'bg-yellow-400' : 'bg-red-500';
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />;
+};
 
   const handleSaveSettings = () => {
     localStorage.setItem('gemini_api_key', geminiKey);
@@ -177,16 +187,17 @@ export default function App() {
     setShowSettings(false);
   };
 
-  const handleExport = () => window.open('http://localhost:8000/api/export', '_blank');
+const handleExport = () => window.open('http://localhost:8000/api/export', '_blank');
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
-      audioContextRef.current = audioContext;
-      const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    setMicStatus('granted');
+    streamRef.current = stream;
+    const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+    audioContextRef.current = audioContext;
+    const source = audioContext.createMediaStreamSource(stream);
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
       processor.onaudioprocess = (e) => {
         if (!isRecording) return;
@@ -197,12 +208,12 @@ export default function App() {
           wsRef.current.send(JSON.stringify({ type: 'audio', data: window.btoa(binary) }));
         }
       };
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-      setIsRecording(true);
-      setStatus('Listening...');
-    } catch (err) { console.error(err); setStatus('Mic Error'); }
-  };
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+    setIsRecording(true);
+    setStatus('Listening...');
+  } catch (err) { console.error(err); setStatus('Mic Error'); setMicStatus('denied'); }
+};
 
   const stopRecording = () => {
     if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null; }
