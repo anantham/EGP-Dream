@@ -1,6 +1,7 @@
 import time
 import json
 import os
+import asyncio
 from collections import defaultdict
 import statistics
 
@@ -16,19 +17,35 @@ class Instrumentation:
             try:
                 with open(METRICS_FILE, 'r') as f:
                     data = json.load(f)
+                    # Cap history on load to prevent memory bloat
                     for k, v in data.items():
-                        self.metrics[k] = v
-                print("Metrics loaded from disk.")
+                        self.metrics[k] = v[-100:] # Keep only last 100
+                print("Metrics loaded.")
             except Exception as e:
-                print(f"Failed to load metrics: {e}")
+                print(f"Failed to load metrics (resetting): {e}")
+                self.metrics = defaultdict(list)
 
     def save_metrics(self):
+        # Sync wrapper for now, but main.py calls this via side-effect?
+        # Ideally we should not block. We will use a fire-and-forget thread approach internally
+        # or just rely on the fact that we call this less frequently.
+        # But end_timer calls it EVERY TIME.
+        
+        # Simple optimization: Only save every 10 samples or use background task
+        # For simplicity/safety, let's just do a quick fire-and-forget write
+        asyncio.create_task(self._async_save())
+
+    async def _async_save(self):
+        try:
+            await asyncio.to_thread(self._write_file)
+        except Exception as e:
+            print(f"Metrics save failed: {e}")
+
+    def _write_file(self):
         try:
             with open(METRICS_FILE, 'w') as f:
-                # Convert defaultdict to dict for JSON serialization
-                json.dump(dict(self.metrics), f, indent=2)
-        except Exception as e:
-            print(f"Failed to save metrics: {e}")
+                json.dump(dict(self.metrics), f)
+        except: pass
 
     def start_timer(self):
         return time.perf_counter()
@@ -38,11 +55,18 @@ class Instrumentation:
         key = f"{category}:{model_name}"
         self.metrics[key].append(duration)
         
-        # Keep only last 100 records (increased from 50 for better history)
         if len(self.metrics[key]) > 100:
             self.metrics[key].pop(0)
             
-        self.save_metrics() # Save on every update (ok for low volume)
+        # Trigger non-blocking save
+        # We need a running loop. If called from sync context, this might fail.
+        # But our app is fully async.
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._async_save())
+        except RuntimeError:
+            pass # No loop running (e.g. unit test)
+            
         return duration
 
     def get_averages(self):

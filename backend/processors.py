@@ -18,11 +18,9 @@ from .config import GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY
 
 class QuestionExtractor(ABC):
     @abstractmethod
-    async def extract(self, text: str) -> str:
-        pass
+    async def extract(self, text: str) -> str: pass
     @abstractmethod
-    def update_config(self, config: dict):
-        pass
+    def update_config(self, config: dict): pass
 
 class NativeGeminiExtractor(QuestionExtractor):
     def __init__(self, model_name="gemini-2.5-flash"):
