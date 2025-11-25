@@ -321,6 +321,7 @@ class CloudBatchedProcessor(AudioProcessor):
         self.prev_tail = []
         self.client = None # For OpenRouter/OpenAI REST
         self.api_keys = {}
+        self.last_debug_text = ""
         print(f"Initializing Cloud Batched: {mode}")
 
     def update_config(self, config: dict):
@@ -394,12 +395,13 @@ class CloudBatchedProcessor(AudioProcessor):
             elif "openai_rest_whisper" in self.mode:
                 # OpenAI Whisper V1 REST (Phase A only usually, but we can ask for prompt?)
                 # Actually Whisper REST is just Transcribe. We need Phase B after.
-        if not self.client: return ""
-        
-        # 1. Transcribe (Phase A)
-        # We need a file-like object with name
-        wav_file = io.BytesIO(wav_data)
-        wav_file.name = "audio.wav"
+                if not self.client: 
+                    return ""
+                
+                # 1. Transcribe (Phase A)
+                # We need a file-like object with name
+                wav_file = io.BytesIO(wav_data)
+                wav_file.name = "audio.wav"
                 
                 transcript_resp = await self.client.audio.transcriptions.create(
                     model="whisper-1", 
@@ -409,7 +411,8 @@ class CloudBatchedProcessor(AudioProcessor):
                 instrumentation.end_timer(start_time, "Phase A", "openai_whisper_rest")
                 timer_recorded = True
                 
-                if not text: return ""
+                if not text: 
+                    return ""
                 
                 # 2. Extract Questions (Phase B) - Using whatever default or hardcoded model?
                 # For simplicity, let's use GPT-4o-mini for this part
