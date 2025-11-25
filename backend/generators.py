@@ -26,10 +26,12 @@ class GeminiImageGenerator(ImageGenerator):
         try:
             target_model = model_name.replace("google/", "") 
             model = genai.GenerativeModel(target_model)
+            print(f"[IMAGE] Gemini request model={target_model} prompt={prompt}")
             response = await model.generate_content_async(
                 prompt,
                 generation_config=genai.types.GenerationConfig(response_modalities=["IMAGE"])
             )
+            print(f"[IMAGE] Gemini response={response}")
             instrumentation.end_timer(start_time, "Phase C", model_name)
             
             if response.parts:
@@ -56,11 +58,13 @@ class OpenRouterImageGenerator(ImageGenerator):
         pricing.track_image(model_name)
         
         try:
+            print(f"[IMAGE] OpenRouter request model={model_name} prompt={prompt}")
             response = await self.client.images.generate(
                 model=model_name,
                 prompt=prompt,
                 n=1, size="1024x1024", response_format="b64_json"
             )
+            print(f"[IMAGE] OpenRouter response={response}")
             instrumentation.end_timer(start_time, "Phase C", model_name)
             if response.data:
                 return f"data:image/png;base64,{response.data[0].b64_json}"

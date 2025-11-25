@@ -115,6 +115,7 @@ class ConnectionState:
             "openrouter_api_key": os.getenv("OPENROUTER_API_KEY"),
             "openai_api_key": os.getenv("OPENAI_API_KEY")
         }
+        print(f"[CONFIG] Loaded API keys from env: gemini={'set' if self.api_keys['gemini_api_key'] else 'missing'}, openrouter={'set' if self.api_keys['openrouter_api_key'] else 'missing'}, openai={'set' if self.api_keys['openai_api_key'] else 'missing'}")
         
         self.audio_processor = get_audio_processor(self.audio_model)
         self.audio_processor.set_question_model(self.question_model)
@@ -151,6 +152,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 audio_bytes = base64.b64decode(message['data'])
                 audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
                 
+                if state.debug:
+                    print(f"[AUDIO] Received chunk len={len(audio_np)} model={state.audio_model}")
                 questions_str = await state.audio_processor.process_audio(audio_np)
                 
                 if questions_str:
@@ -158,7 +161,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     for q in questions:
                         q = q.strip()
                         if q and q not in state.processed_questions:
-                            print(f"New Question: {q}")
+                            print(f"[QUESTION] New Question: {q}")
                             state.processed_questions.add(q)
                             state.all_questions.append(q)
                             
@@ -212,9 +215,15 @@ async def websocket_endpoint(websocket: WebSocket):
         generator_task.cancel()
 
 async def handle_config(message, state: ConnectionState):
-    if 'geminiApiKey' in message: state.api_keys['gemini_api_key'] = message['geminiApiKey']
-    if 'openRouterApiKey' in message: state.api_keys['openrouter_api_key'] = message['openRouterApiKey']
-    if 'openaiApiKey' in message: state.api_keys['openai_api_key'] = message['openaiApiKey']
+    if 'geminiApiKey' in message: 
+        state.api_keys['gemini_api_key'] = message['geminiApiKey']
+        print(f"[CONFIG] Gemini key set via config (length={len(message['geminiApiKey']) if message['geminiApiKey'] else 0})")
+    if 'openRouterApiKey' in message: 
+        state.api_keys['openrouter_api_key'] = message['openRouterApiKey']
+        print(f"[CONFIG] OpenRouter key set via config (length={len(message['openRouterApiKey']) if message['openRouterApiKey'] else 0})")
+    if 'openaiApiKey' in message: 
+        state.api_keys['openai_api_key'] = message['openaiApiKey']
+        print(f"[CONFIG] OpenAI key set via config (length={len(message['openaiApiKey']) if message['openaiApiKey'] else 0})")
     if 'debug' in message: state.debug = bool(message['debug'])
     
     # Logic to switch processors if model changed
@@ -226,18 +235,21 @@ async def handle_config(message, state: ConnectionState):
         state.audio_model = message['audioModel']
         state.audio_processor = get_audio_processor(state.audio_model)
         state.audio_processor.set_question_model(state.question_model)
-        print(f"Switched Audio Model to {state.audio_model}")
+        print(f"[CONFIG] Switched Audio Model to {state.audio_model}")
 
     if 'questionModel' in message and message['questionModel'] != state.question_model:
         state.question_model = message['questionModel']
         state.audio_processor.set_question_model(state.question_model)
+        print(f"[CONFIG] Switched Question Model to {state.question_model}")
         
     if 'imageModel' in message and message['imageModel'] != state.image_model:
         state.image_model = message['imageModel']
         state.image_generator = get_image_generator(state.image_model)
+        print(f"[CONFIG] Switched Image Model to {state.image_model}")
 
     if 'minDisplayTime' in message:
         state.min_display_time = int(message['minDisplayTime'])
+        print(f"[CONFIG] min_display_time set to {state.min_display_time}")
         
     if 'sessionName' in message:
         state.session.set_session_name(message['sessionName'])

@@ -148,6 +148,7 @@ class LocalWhisperProcessor(AudioProcessor):
         # Calculate duration for cost (Local is free but nice to track volume)
         duration = len(audio_data) / 16000.0
         pricing.track_audio("local_whisper", duration)
+        self.last_debug_text = f"[LOCAL] Received {duration:.2f}s audio for model {self.pipeline.model}"
         
         self.pipeline.add_new_chunk(audio_data)
         approved, assumption = self.pipeline.process_new_chunk()
@@ -175,6 +176,7 @@ class LocalWhisperProcessor(AudioProcessor):
             
             model_label = getattr(self.extractor, 'model_name', 'unknown')
             instrumentation.end_timer(start_b, "Phase B", model_label)
+            print(f"[QUESTION] Extracted using {model_label}: {questions}")
             
             return questions
         return ""
@@ -216,7 +218,7 @@ class OpenAIRealtimeProcessor(AudioProcessor):
         
         try:
             self.ws = await websockets.connect(url, additional_headers=header)
-            print("Connected to OpenAI Realtime WebSocket")
+            print(f"[REALTIME] Connected to OpenAI Realtime WebSocket model={self.model_name}")
             
             # Init Session for Transcription
             await self.ws.send(json.dumps({
@@ -232,7 +234,7 @@ class OpenAIRealtimeProcessor(AudioProcessor):
             self.listener_task = asyncio.create_task(self._listen_loop())
             
         except Exception as e:
-            print(f"Realtime Connection Failed: {e}")
+            print(f"[REALTIME] Connection Failed: {e}")
 
     def _float32_to_pcm16(self, audio_np: np.ndarray) -> bytes:
         return (audio_np * 32767).astype(np.int16).tobytes()
@@ -254,7 +256,7 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                                 pass
                         await self.transcript_queue.put(transcript)
         except Exception as e:
-            print(f"Realtime listener error: {e}")
+            print(f"[REALTIME] Listener error: {e}")
 
     async def process_audio(self, audio_data: np.ndarray) -> str:
         await self.ensure_connection()
@@ -271,6 +273,7 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                 "type": "input_audio_buffer.append",
                 "audio": pcm_base64
             }))
+            self.last_debug_text = f"[REALTIME] Sent {duration:.2f}s chunk to {self.model_name}"
             # Drain any transcripts collected by listener
             while True:
                 try:
@@ -332,6 +335,7 @@ class CloudBatchedProcessor(AudioProcessor):
         # Setup OpenAI Client for REST Mode
         if 'openai_api_key' in config:
              self.client = AsyncOpenAI(api_key=config['openai_api_key'])
+        print(f"[CONFIG] CloudBatched mode={self.mode} configured gemini_key={'set' if config.get('gemini_api_key') else 'missing'} openai_key={'set' if config.get('openai_api_key') else 'missing'}")
 
     def set_question_model(self, model_name: str):
         pass 
@@ -382,11 +386,12 @@ class CloudBatchedProcessor(AudioProcessor):
                 # Gemini Native (A+B)
                 model = genai.GenerativeModel('gemini-2.5-flash') 
                 prompt = "Listen to this audio. If there is a clear philosophical or salient question asked, transcribe ONLY the question text. If there is just conversation or silence, return 'NO'."
-                
+                print(f"[CLOUD] Sending Gemini audio request len={len(wav_data)} mode={self.mode}")
                 response = await model.generate_content_async([
                     prompt,
                     {"mime_type": "audio/wav", "data": wav_data}
                 ])
+                print(f"[CLOUD] Gemini audio response: {response.text}")
                 result = response.text.strip()
                 instrumentation.end_timer(start_time, "Phase A+B", "gemini_native")
                 timer_recorded = True
