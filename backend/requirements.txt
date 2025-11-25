@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+google-generativeai
+python-dotenv
+numpy
+websockets
+openai
+git+https://github.com/TheStageAI/TheWhisper.git
