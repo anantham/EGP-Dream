@@ -38,6 +38,7 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   
   // Config
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('gemini_api_key') || '');
@@ -59,6 +60,7 @@ export default function App() {
   const [status, setStatus] = useState<string>('');
   const [metrics, setMetrics] = useState<Record<string, any>>({});
   const [cost, setCost] = useState<Record<string, any>>({ total: 0, breakdown: {} });
+  const [debugText, setDebugText] = useState<string[]>([]);
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -89,6 +91,9 @@ export default function App() {
         setHistory(prev => [...prev, data.item]);
       }
       else if (data.type === 'status') setStatus(data.message);
+      else if (data.type === 'debug_text') {
+        setDebugText(prev => [...prev.slice(-10), data.text || '']);
+      }
       else if (data.type === 'metrics') {
         setMetrics(data.data.latency || {});
         setCost(data.data.cost || { total: 0, breakdown: {} });
@@ -128,6 +133,7 @@ export default function App() {
         geminiApiKey: geminiKey,
         openRouterApiKey: openRouterKey,
         openaiApiKey: openaiKey,
+        debug: showDebug,
         audioModel, questionModel, imageModel, minDisplayTime, sessionName
       }));
     }
@@ -271,9 +277,21 @@ export default function App() {
         </div>
       )}
 
+      {showDebug && (
+        <div className="absolute top-20 left-8 w-96 max-h-[50vh] bg-black/80 backdrop-blur-md border border-purple-500/30 rounded-xl p-4 overflow-y-auto z-40">
+          <h3 className="text-sm mb-2 border-b border-white/10 pb-1 font-mono text-purple-300 flex items-center gap-2"><Activity size={14}/> Debug Transcript</h3>
+          {debugText.length === 0 && <p className="text-xs text-white/40">No debug text received. Backend must emit 'debug_text' messages to populate this.</p>}
+          <ul className="space-y-2 text-xs">
+            {debugText.map((t, i) => (
+              <li key={i} className="bg-white/5 border border-white/10 rounded p-2 text-white/80">{t}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {showSettings && (
-        <div className="absolute inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-6 border-b border-white/10">
               <h2 className="text-xl tracking-wide">CONFIGURATION</h2>
               <button onClick={() => setShowSettings(false)}><X size={24} /></button>
