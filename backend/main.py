@@ -239,6 +239,13 @@ async def image_worker(websocket: WebSocket, state: ConnectionState):
             if image_url:
                 filename = f"img_{int(datetime.now().timestamp())}"
                 await state.session.log_item(question, filename, image_url)
+                
+                # Send history update for navigation
+                await websocket.send_json({
+                    "type": "history_update",
+                    "item": {"question": question, "url": image_url, "timestamp": datetime.now().isoformat()}
+                })
+                
                 await state.display_queue.put({"url": image_url, "prompt": question})
             else:
                 await websocket.send_json({"type": "status", "message": "Failed to generate image"})

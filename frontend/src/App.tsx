@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, Pause, Settings as SettingsIcon, X, List, Activity, Clock, Download, FolderOpen, DollarSign } from 'lucide-react';
+import { Mic, Pause, Settings as SettingsIcon, X, List, Activity, Clock, Download, FolderOpen, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const SAMPLE_RATE = 16000;
 
@@ -28,11 +28,18 @@ const IMAGE_MODELS = [
   { id: "stabilityai/stable-diffusion-3-medium", name: "SD3 Medium (OpenRouter)" }
 ];
 
+interface HistoryItem {
+  question: string;
+  url: string;
+  timestamp: string;
+}
+
 export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
   
+  // Config
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('gemini_api_key') || '');
   const [openRouterKey, setOpenRouterKey] = useState(localStorage.getItem('openrouter_api_key') || '');
   const [openaiKey, setOpenaiKey] = useState(localStorage.getItem('openai_api_key') || '');
@@ -42,10 +49,14 @@ export default function App() {
   const [minDisplayTime, setMinDisplayTime] = useState(6);
   const [sessionName, setSessionName] = useState(`Session_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
 
-  const [currentImage, setCurrentImage] = useState<string | null>(null);
-  const [currentPrompt, setCurrentPrompt] = useState<string>('');
+  // App State
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [viewIndex, setViewIndex] = useState<number>(-1); // -1 means "Live/Latest"
+  
+  const [liveImage, setLiveImage] = useState<string | null>(null);
+  const [livePrompt, setLivePrompt] = useState<string>('');
+  
   const [status, setStatus] = useState<string>('');
-  const [questions, setQuestions] = useState<string[]>([]);
   const [metrics, setMetrics] = useState<Record<string, any>>({});
   const [cost, setCost] = useState<Record<string, any>>({ total: 0, breakdown: {} });
   
@@ -53,6 +64,11 @@ export default function App() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+
+  // Current Display Logic
+  const isLive = viewIndex === -1 || viewIndex >= history.length;
+  const displayImage = isLive ? liveImage : history[viewIndex]?.url;
+  const displayPrompt = isLive ? livePrompt : history[viewIndex]?.question;
 
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:8000/ws');
@@ -65,11 +81,14 @@ export default function App() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'image') {
-        setCurrentImage(data.url);
-        setCurrentPrompt(data.prompt);
-        setStatus(`Generated: ${data.prompt.substring(0, 30)}...`);
-      } else if (data.type === 'status') setStatus(data.message);
-      else if (data.type === 'questions_list') setQuestions(data.questions);
+        setLiveImage(data.url);
+        setLivePrompt(data.prompt);
+        // If we are in live mode, we stay in live mode and see the new image
+      } 
+      else if (data.type === 'history_update') {
+        setHistory(prev => [...prev, data.item]);
+      }
+      else if (data.type === 'status') setStatus(data.message);
       else if (data.type === 'metrics') {
         setMetrics(data.data.latency || {});
         setCost(data.data.cost || { total: 0, breakdown: {} });
@@ -79,6 +98,28 @@ export default function App() {
     wsRef.current = ws;
     return () => ws.close();
   }, []);
+
+  // Keyboard Navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (history.length === 0) return;
+      
+      if (e.key === 'ArrowLeft') {
+        setViewIndex(prev => {
+          if (prev === -1) return history.length - 1; // Start from end
+          return Math.max(0, prev - 1);
+        });
+      } else if (e.key === 'ArrowRight') {
+        setViewIndex(prev => {
+          if (prev === -1) return -1; // Already live
+          if (prev >= history.length - 1) return -1; // Go back to live
+          return prev + 1;
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [history.length]);
 
   const sendConfig = (wsInstance: WebSocket | null = wsRef.current) => {
     if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
@@ -138,12 +179,22 @@ export default function App() {
   const toggleRecording = () => isRecording ? stopRecording() : startRecording();
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden text-white font-light">
-      {currentImage ? (
+    <div className="relative w-full h-screen bg-black overflow-hidden text-white font-light select-none">
+      {/* Main Visual */}
+      {displayImage ? (
         <div className="absolute inset-0 animate-fade-in">
-           <img src={currentImage} alt="Art" className="w-full h-full object-cover" />
-           <div className="absolute bottom-32 left-0 w-full text-center bg-black/30 backdrop-blur-sm p-4">
-              <p className="text-xl italic">"{currentPrompt}"</p>
+           <img src={displayImage} alt="Art" className="w-full h-full object-cover" />
+           
+           {/* Enhanced Question Overlay */}
+           <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/90 via-black/50 to-transparent p-12 pb-32 flex flex-col items-center text-center">
+              <p className="text-2xl md:text-4xl font-light leading-relaxed max-w-4xl drop-shadow-lg font-serif tracking-wide">
+                "{displayPrompt}"
+              </p>
+              {!isLive && (
+                <div className="mt-4 text-xs uppercase tracking-[0.2em] text-white/50 bg-white/10 px-3 py-1 rounded-full">
+                  History Mode ({viewIndex + 1} / {history.length})
+                </div>
+              )}
            </div>
         </div>
       ) : (
@@ -152,7 +203,15 @@ export default function App() {
         </div>
       )}
 
-      <div className="absolute top-8 left-0 w-full text-center pointer-events-none">
+      {/* Navigation Hints (Left/Right hover areas) */}
+      <div className="absolute inset-y-0 left-0 w-24 hover:bg-white/5 transition-colors flex items-center justify-center group opacity-0 hover:opacity-100 cursor-pointer" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }))}>
+         <ChevronLeft size={48} className="text-white/50 group-hover:text-white" />
+      </div>
+      <div className="absolute inset-y-0 right-0 w-24 hover:bg-white/5 transition-colors flex items-center justify-center group opacity-0 hover:opacity-100 cursor-pointer" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))}>
+         <ChevronRight size={48} className="text-white/50 group-hover:text-white" />
+      </div>
+
+      <div className="absolute top-8 left-0 w-full text-center pointer-events-none z-10">
         <p className="text-white/50 text-sm font-mono tracking-wider uppercase">{status}</p>
       </div>
 
@@ -167,12 +226,17 @@ export default function App() {
         <button onClick={() => setShowSettings(true)} className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/10 hover:opacity-100 opacity-40 hover:scale-105"><SettingsIcon size={32} /></button>
       </div>
 
+      {/* Questions History Sidebar */}
       {showQuestions && (
         <div className="absolute top-20 right-8 w-80 max-h-[60vh] bg-black/80 backdrop-blur-md border border-white/10 rounded-xl p-4 overflow-y-auto z-40">
-           <h3 className="text-lg mb-4 border-b border-white/10 pb-2">Identified Questions</h3>
-           <ul className="space-y-3">
-             {questions.map((q, i) => <li key={i} className="text-sm text-white/80 italic">"{q}"</li>)}
-             {questions.length === 0 && <li className="text-white/30">No questions detected yet.</li>}
+           <h3 className="text-lg mb-4 border-b border-white/10 pb-2 font-serif italic">Question Log</h3>
+           <ul className="space-y-4">
+             {history.map((item, i) => (
+               <li key={i} className={`text-sm border-l-2 pl-3 py-1 cursor-pointer transition-colors ${viewIndex === i ? 'border-purple-500 text-white' : 'border-transparent text-white/60 hover:text-white hover:border-white/30'}`} onClick={() => setViewIndex(i)}>
+                 "{item.question}"
+               </li>
+             ))}
+             {history.length === 0 && <li className="text-white/30">No questions yet.</li>}
            </ul>
         </div>
       )}
@@ -203,7 +267,7 @@ export default function App() {
                     <div>
                         <p className="text-white/50 border-b border-white/10 mb-2 pb-1">LATENCY (AVG)</p>
                         {Object.entries(metrics).map(([k, v]) => (
-                            <div key={k} className="flex justify-between py-1"><span>{k}</span><span className="text-purple-300">{v.toFixed(3)}s</span></div>
+                            <div key={k} className="flex justify-between py-1"><span>{k}</span><span className="text-purple-300">{Number(v).toFixed(3)}s</span></div>
                         ))}
                     </div>
                     <div>
