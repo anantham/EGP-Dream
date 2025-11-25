@@ -131,6 +131,7 @@ class LocalWhisperProcessor(AudioProcessor):
         self.accumulated_text = ""
         self.last_check_text = ""
         self.config_cache = {}
+        self.last_debug_text = ""
 
     def update_config(self, config: dict):
         self.config_cache = config
@@ -159,6 +160,7 @@ class LocalWhisperProcessor(AudioProcessor):
                 self.accumulated_text = self.accumulated_text[-2000:]
 
         current_full_text = (self.accumulated_text + " " + assumption).strip()
+        self.last_debug_text = current_full_text
         instrumentation.end_timer(start_time, "Phase A", "local_whisper")
 
         if not current_full_text:
@@ -278,6 +280,7 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                     self.transcript_queue.task_done()
                 except asyncio.QueueEmpty:
                     break
+            self.last_debug_text = self.accumulated_text
             
         finally:
             instrumentation.end_timer(start_time, "Phase A", "openai_realtime")
@@ -370,6 +373,8 @@ class CloudBatchedProcessor(AudioProcessor):
         
         start_time = instrumentation.start_timer()
         timer_recorded = False
+        # For debug display
+        self.last_debug_text = f"Sent {duration:.1f}s audio chunk ({len(audio_np)} samples)"
         
         try:
             if "gemini" in self.mode:
@@ -389,12 +394,12 @@ class CloudBatchedProcessor(AudioProcessor):
             elif "openai_rest_whisper" in self.mode:
                 # OpenAI Whisper V1 REST (Phase A only usually, but we can ask for prompt?)
                 # Actually Whisper REST is just Transcribe. We need Phase B after.
-                if not self.client: return ""
-                
-                # 1. Transcribe (Phase A)
-                # We need a file-like object with name
-                wav_file = io.BytesIO(wav_data)
-                wav_file.name = "audio.wav"
+        if not self.client: return ""
+        
+        # 1. Transcribe (Phase A)
+        # We need a file-like object with name
+        wav_file = io.BytesIO(wav_data)
+        wav_file.name = "audio.wav"
                 
                 transcript_resp = await self.client.audio.transcriptions.create(
                     model="whisper-1", 

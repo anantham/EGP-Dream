@@ -99,6 +99,7 @@ class ConnectionState:
         self.question_model = DEFAULT_QUESTION_MODEL
         self.image_model = DEFAULT_IMAGE_MODEL
         self.min_display_time = 6
+        self.debug = False
         
         self.api_keys = {
             "gemini_api_key": os.getenv("GEMINI_API_KEY"),
@@ -157,6 +158,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "questions": state.all_questions
                             })
                             await state.image_queue.put(q)
+                    if state.debug and hasattr(state.audio_processor, "last_debug_text"):
+                        await websocket.send_json({"type": "debug_text", "text": getattr(state.audio_processor, "last_debug_text", "")})
 
             elif message['type'] == 'config':
                 await handle_config(message, state)
@@ -203,6 +206,7 @@ async def handle_config(message, state: ConnectionState):
     if 'geminiApiKey' in message: state.api_keys['gemini_api_key'] = message['geminiApiKey']
     if 'openRouterApiKey' in message: state.api_keys['openrouter_api_key'] = message['openRouterApiKey']
     if 'openaiApiKey' in message: state.api_keys['openai_api_key'] = message['openaiApiKey']
+    if 'debug' in message: state.debug = bool(message['debug'])
     
     # Logic to switch processors if model changed
     if 'audioModel' in message and message['audioModel'] != state.audio_model:

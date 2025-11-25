@@ -14,7 +14,7 @@ if [ -d "$DIR/.venv" ]; then
 fi
 
 echo "Starting backend (uvicorn backend.main:app) -> $BACKEND_LOG"
-(cd "$DIR/backend" && uvicorn main:app --host 0.0.0.0 --port 8000 >> "$BACKEND_LOG" 2>&1) &
+(cd "$DIR" && uvicorn backend.main:app --host 0.0.0.0 --port 8000 >> "$BACKEND_LOG" 2>&1) &
 BACK_PID=$!
 echo $BACK_PID > "$LOG_DIR/backend.pid"
 
