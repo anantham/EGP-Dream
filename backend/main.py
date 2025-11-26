@@ -120,13 +120,16 @@ class ConnectionState:
             "openai_api_key": os.getenv("OPENAI_API_KEY")
         }
         log(f"[CONFIG] Loaded API keys from env: gemini={'set' if self.api_keys['gemini_api_key'] else 'missing'}, openrouter={'set' if self.api_keys['openrouter_api_key'] else 'missing'}, openai={'set' if self.api_keys['openai_api_key'] else 'missing'}")
+        log(f"[CONFIG] Defaults: audio={self.audio_model}, question={self.question_model}, image={self.image_model}, minDisplayTime={self.min_display_time}")
         
         self.audio_processor = get_audio_processor(self.audio_model)
         self.audio_processor.set_question_model(self.question_model)
         self.audio_processor.update_config(self.api_keys)
+        log(f"[CONFIG] Audio processor class={type(self.audio_processor).__name__}")
         
         self.image_generator = get_image_generator(self.image_model)
         self.image_generator.update_config(self.api_keys)
+        log(f"[CONFIG] Image generator class={type(self.image_generator).__name__}")
         
         self.image_queue = asyncio.Queue()
         self.display_queue = asyncio.Queue()
