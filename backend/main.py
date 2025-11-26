@@ -164,19 +164,38 @@ async def websocket_endpoint(websocket: WebSocket):
                 questions_str = await state.audio_processor.process_audio(audio_np)
                 
                 if questions_str:
-                    questions = questions_str.split('|||')
-                    for q in questions:
-                        q = q.strip()
-                        if q and q not in state.processed_questions:
-                            log(f"[QUESTION] New Question: {q}")
-                            state.processed_questions.add(q)
-                            state.all_questions.append(q)
-                            
-                            await websocket.send_json({
-                                "type": "questions_list",
-                                "questions": state.all_questions
-                            })
-                            await state.image_queue.put(q)
+                    try:
+                        parsed = json.loads(questions_str)
+                        if isinstance(parsed, list):
+                            for item in parsed:
+                                q = (item.get("question") or "").strip()
+                                img_prompt = (item.get("image_prompt") or q).strip()
+                                if q and q not in state.processed_questions:
+                                    log(f"[QUESTION] New Question: {q}")
+                                    state.processed_questions.add(q)
+                                    state.all_questions.append(q)
+                                    await websocket.send_json({
+                                        "type": "questions_list",
+                                        "questions": state.all_questions
+                                    })
+                                    await state.image_queue.put(img_prompt)
+                        else:
+                            log(f"[QUESTION] Unexpected JSON question format: {parsed}")
+                    except Exception:
+                        # Fallback to old '|||' delimited string
+                        questions = questions_str.split('|||')
+                        for q in questions:
+                            q = q.strip()
+                            if q and q not in state.processed_questions:
+                                log(f"[QUESTION] New Question: {q}")
+                                state.processed_questions.add(q)
+                                state.all_questions.append(q)
+                                
+                                await websocket.send_json({
+                                    "type": "questions_list",
+                                    "questions": state.all_questions
+                                })
+                                await state.image_queue.put(q)
                     if state.debug and hasattr(state.audio_processor, "last_debug_text"):
                         await websocket.send_json({"type": "debug_text", "text": getattr(state.audio_processor, "last_debug_text", "")})
 

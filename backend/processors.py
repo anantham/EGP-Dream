@@ -33,8 +33,10 @@ class NativeGeminiExtractor(QuestionExtractor):
 
     async def extract(self, text: str) -> str:
         prompt = f"""
-        Analyze the transcript. Return ONLY the complete, philosophical, or salient questions asked. 
-        Separate multiple questions with '|||'. If no clear question, return "NO".
+        Analyze the transcript and return a JSON array of objects with fields "question" and "image_prompt".
+        - Extract complete, salient questions only.
+        - For each question, craft a vivid, detailed image_prompt describing the scene to visualize the question.
+        - If no clear question, return "NO".
         Transcript: "{text}"
         """
         try:
@@ -65,15 +67,17 @@ class OpenRouterExtractor(QuestionExtractor):
     async def extract(self, text: str) -> str:
         if not self.client: return ""
         prompt = f"""
-        Analyze the transcript. Return ONLY the complete, philosophical, or salient questions asked. 
-        Separate multiple questions with '|||'. If no clear question, return "NO".
+        Analyze the transcript and return a JSON array of objects with fields "question" and "image_prompt".
+        - Extract complete, salient questions only.
+        - For each question, craft a vivid, detailed image_prompt describing the scene to visualize the question.
+        - If no clear question, return "NO".
         Transcript: "{text}"
         """
         try:
             response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
-                    {"role": "system", "content": "You are a helpful scribe. Extract questions from the transcript. Return ONLY the questions separated by '|||' or 'NO'."},
+                    {"role": "system", "content": "You are a helpful scribe. Extract questions from the transcript. Return JSON with question and image_prompt fields, or 'NO'."},
                     {"role": "user", "content": prompt}
                 ]
             )
