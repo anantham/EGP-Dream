@@ -49,7 +49,7 @@ export default function App() {
   const [openaiKey, setOpenaiKey] = useState(localStorage.getItem('openai_api_key') || '');
   const [audioModel, setAudioModel] = useState('openai_realtime_4o');
   const [questionModel, setQuestionModel] = useState('gemini-2.5-flash');
-  const [imageModel, setImageModel] = useState('google/gemini-2.5-flash-image');
+  const [imageModel, setImageModel] = useState('google/gemini-3-pro-image-preview');
   const [minDisplayTime, setMinDisplayTime] = useState(6);
   const [sessionName, setSessionName] = useState(`Session_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
 

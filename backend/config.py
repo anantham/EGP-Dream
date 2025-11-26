@@ -37,4 +37,4 @@ IMAGE_MODELS = {
 
 DEFAULT_AUDIO_MODEL = "openai_realtime_4o"
 DEFAULT_QUESTION_MODEL = "gemini-2.5-flash"
-DEFAULT_IMAGE_MODEL = "google/gemini-2.5-flash-image"
+DEFAULT_IMAGE_MODEL = "google/gemini-3-pro-image-preview"
