@@ -6,7 +6,7 @@ import shutil
 import numpy as np
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
@@ -372,6 +372,48 @@ async def export_session(session_name: str = None):
         str(session_path)
     )
     return FileResponse(zip_path, media_type='application/zip', filename=zip_filename)
+
+
+@app.get("/api/sessions")
+async def list_sessions():
+    sessions = []
+    if SESSION_ROOT.exists():
+        for d in SESSION_ROOT.iterdir():
+            if d.is_dir():
+                sessions.append({
+                    "name": d.name,
+                    "modified": os.path.getmtime(d)
+                })
+    sessions = sorted(sessions, key=lambda x: x['modified'], reverse=True)
+    return JSONResponse(sessions)
+
+
+@app.get("/api/session/{session_name}")
+async def get_session(session_name: str):
+    session_dir = SESSION_ROOT / session_name
+    log_file = session_dir / "session_log.json"
+    if not log_file.exists():
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    try:
+        with open(log_file, 'r') as f:
+            data = json.load(f)
+        # Attach image URLs relative to server
+        for item in data:
+            img_file = item.get("image_file")
+            if img_file:
+                item["url"] = f"/api/session/{session_name}/image/{img_file}"
+        return JSONResponse(data)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/session/{session_name}/image/{image_file}")
+async def get_session_image(session_name: str, image_file: str):
+    # Expecting image_file to include extension
+    img_path = SESSION_ROOT / session_name / "images" / image_file
+    if not img_path.exists():
+        return JSONResponse({"error": "Image not found"}, status_code=404)
+    return FileResponse(img_path)
 
 if __name__ == "__main__":
     import uvicorn
