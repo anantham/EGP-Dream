@@ -193,6 +193,7 @@ class OpenAIRealtimeProcessor(AudioProcessor):
         self.ws = None
         self.listener_task = None
         self.transcript_queue = asyncio.Queue(maxsize=10)
+        self.question_queue = asyncio.Queue(maxsize=10)
         self.extractor = NativeGeminiExtractor() 
         self.accumulated_text = ""
         self.last_check_text = ""
@@ -231,7 +232,13 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                     "modalities": ["text"], # We only want text back, not audio
                     "input_audio_transcription": {
                         "model": "whisper-1"
-                    }
+                    },
+                    "instructions": (
+                        "You are a live scribe. As you receive audio, extract complete, salient questions. "
+                        "For each question, emit a JSON object with fields 'question' and 'image_prompt'. "
+                        "The image_prompt should be a vivid, detailed scene to visualize the question. "
+                        "If no complete question is heard yet, emit nothing. Emit only JSON; no extra text."
+                    )
                 }
             }))
             # Start dedicated listener
@@ -259,6 +266,21 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                             except asyncio.QueueEmpty:
                                 pass
                         await self.transcript_queue.put(transcript)
+                elif event.get('type') == 'response.output_text.delta':
+                    text_delta = event.get('text', '')
+                    if text_delta:
+                        try:
+                            parsed = json.loads(text_delta)
+                            if isinstance(parsed, dict) or isinstance(parsed, list):
+                                if self.question_queue.full():
+                                    try:
+                                        self.question_queue.get_nowait()
+                                        self.question_queue.task_done()
+                                    except asyncio.QueueEmpty:
+                                        pass
+                                await self.question_queue.put(parsed)
+                        except Exception:
+                            pass
         except Exception as e:
             print(f"[REALTIME] Listener error: {e}")
 
@@ -278,16 +300,16 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                 "audio": pcm_base64
             }))
             self.last_debug_text = f"[REALTIME] Sent {duration:.2f}s chunk to {self.model_name}"
-            # Drain any transcripts collected by listener
+            collected = []
             while True:
                 try:
-                    transcript = self.transcript_queue.get_nowait()
-                    self.accumulated_text += " " + transcript
-                    self.accumulated_text = self.accumulated_text.strip()
-                    self.transcript_queue.task_done()
+                    item = self.question_queue.get_nowait()
+                    collected.append(item)
+                    self.question_queue.task_done()
                 except asyncio.QueueEmpty:
                     break
-            self.last_debug_text = self.accumulated_text
+            if collected:
+                return json.dumps(collected)
             
         finally:
             instrumentation.end_timer(start_time, "Phase A", "openai_realtime")
