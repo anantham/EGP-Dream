@@ -66,6 +66,7 @@ export default function App() {
   const [debugText, setDebugText] = useState<string[]>([]);
   const [sessionList, setSessionList] = useState<{name: string, modified: number}[]>([]);
   const [loadedSession, setLoadedSession] = useState<string | null>(null);
+  const appVersion = "v0.01";
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -333,7 +334,10 @@ const startRecording = async () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex">
           <div className="w-1/3 min-w-[320px] max-w-sm bg-neutral-950/90 border-r border-white/10 p-6 overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold tracking-wide text-white/80">Settings</h2>
+              <div>
+                <h2 className="text-lg font-semibold tracking-wide text-white/80">Settings</h2>
+                <p className="text-xs text-white/40">Version {appVersion}</p>
+              </div>
               <button onClick={() => setSettingsView('hidden')} className="text-white/60 hover:text-white"><X size={24} /></button>
             </div>
             <div className="space-y-6">
