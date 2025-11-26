@@ -259,15 +259,15 @@ async def websocket_endpoint(websocket: WebSocket):
         generator_task.cancel()
 
 async def handle_config(message, state: ConnectionState):
-    if 'geminiApiKey' in message: 
+    if 'geminiApiKey' in message and message['geminiApiKey']: 
         state.api_keys['gemini_api_key'] = message['geminiApiKey']
-        log(f"[CONFIG] Gemini key set via config (length={len(message['geminiApiKey']) if message['geminiApiKey'] else 0})")
-    if 'openRouterApiKey' in message: 
+        log(f"[CONFIG] Gemini key set via config (length={len(message['geminiApiKey'])})")
+    if 'openRouterApiKey' in message and message['openRouterApiKey']: 
         state.api_keys['openrouter_api_key'] = message['openRouterApiKey']
-        log(f"[CONFIG] OpenRouter key set via config (length={len(message['openRouterApiKey']) if message['openRouterApiKey'] else 0})")
-    if 'openaiApiKey' in message: 
+        log(f"[CONFIG] OpenRouter key set via config (length={len(message['openRouterApiKey'])})")
+    if 'openaiApiKey' in message and message['openaiApiKey']: 
         state.api_keys['openai_api_key'] = message['openaiApiKey']
-        log(f"[CONFIG] OpenAI key set via config (length={len(message['openaiApiKey']) if message['openaiApiKey'] else 0})")
+        log(f"[CONFIG] OpenAI key set via config (length={len(message['openaiApiKey'])})")
     if 'debug' in message: state.debug = bool(message['debug'])
     
     # Logic to switch processors if model changed
