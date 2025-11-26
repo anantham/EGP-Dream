@@ -237,7 +237,8 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                         "You are a live scribe. As you receive audio, extract complete, salient questions. "
                         "For each question, emit a JSON object with fields 'question' and 'image_prompt'. "
                         "The image_prompt should be a vivid, detailed scene to visualize the question. "
-                        "If no complete question is heard yet, emit nothing. Emit only JSON; no extra text."
+                        "If no complete question is heard yet, emit a JSON object with a 'summary' field describing what was heard. "
+                        "Emit only JSON; no extra text."
                     )
                 }
             }))

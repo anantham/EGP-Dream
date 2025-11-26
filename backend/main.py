@@ -168,8 +168,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         parsed = json.loads(questions_str)
                         if isinstance(parsed, list):
                             for item in parsed:
-                                q = (item.get("question") or "").strip()
-                                img_prompt = (item.get("image_prompt") or q).strip()
+                                q = (item.get("question") or "").strip() if isinstance(item, dict) else ""
+                                img_prompt = (item.get("image_prompt") or q).strip() if isinstance(item, dict) else ""
+                                summary = (item.get("summary") or "").strip() if isinstance(item, dict) else ""
                                 if q and q not in state.processed_questions:
                                     log(f"[QUESTION] New Question: {q}")
                                     state.processed_questions.add(q)
@@ -178,11 +179,27 @@ async def websocket_endpoint(websocket: WebSocket):
                                         "type": "questions_list",
                                         "questions": state.all_questions
                                     })
-                                    await state.image_queue.put(img_prompt)
+                                    await state.image_queue.put(img_prompt or q)
+                                elif summary:
+                                    await websocket.send_json({"type": "status", "message": f"Summary: {summary}"})
+                        elif isinstance(parsed, dict):
+                            q = parsed.get("question", "").strip()
+                            img_prompt = parsed.get("image_prompt", q).strip()
+                            summary = parsed.get("summary", "").strip()
+                            if q and q not in state.processed_questions:
+                                log(f"[QUESTION] New Question: {q}")
+                                state.processed_questions.add(q)
+                                state.all_questions.append(q)
+                                await websocket.send_json({
+                                    "type": "questions_list",
+                                    "questions": state.all_questions
+                                })
+                                await state.image_queue.put(img_prompt or q)
+                            elif summary:
+                                await websocket.send_json({"type": "status", "message": f"Summary: {summary}"})
                         else:
                             log(f"[QUESTION] Unexpected JSON question format: {parsed}")
                     except Exception:
-                        # Fallback to old '|||' delimited string
                         questions = questions_str.split('|||')
                         for q in questions:
                             q = q.strip()
