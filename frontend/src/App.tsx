@@ -36,7 +36,7 @@ interface HistoryItem {
 
 export default function App() {
   const [isRecording, setIsRecording] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [settingsView, setSettingsView] = useState<'hidden' | 'open'>('hidden');
   const [showQuestions, setShowQuestions] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [micStatus, setMicStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
@@ -183,7 +183,7 @@ const statusDot = (state: 'ok' | 'warn' | 'err') => {
     localStorage.setItem('openrouter_api_key', openRouterKey);
     localStorage.setItem('openai_api_key', openaiKey);
     sendConfig();
-    setShowSettings(false);
+    setSettingsView('hidden');
   };
 
 const handleExport = () => window.open('http://localhost:8000/api/export', '_blank');
@@ -269,7 +269,7 @@ const startRecording = async () => {
 
       <div className="absolute bottom-8 right-8 z-50 flex gap-4">
         <button onClick={() => setShowQuestions(!showQuestions)} className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/10 hover:opacity-100 opacity-40 hover:scale-105"><List size={32} /></button>
-        <button onClick={() => setShowSettings(true)} className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/10 hover:opacity-100 opacity-40 hover:scale-105"><SettingsIcon size={32} /></button>
+        <button onClick={() => setSettingsView('open')} className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/10 hover:opacity-100 opacity-40 hover:scale-105"><SettingsIcon size={32} /></button>
       </div>
 
       {/* Questions History Sidebar */}
@@ -299,91 +299,105 @@ const startRecording = async () => {
         </div>
       )}
 
-      {showSettings && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center p-6 border-b border-white/10">
-              <h2 className="text-xl tracking-wide">CONFIGURATION</h2>
-              <button onClick={() => setShowSettings(false)}><X size={24} /></button>
+      {settingsView === 'open' && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex">
+          <div className="w-1/3 min-w-[320px] max-w-sm bg-neutral-950/90 border-r border-white/10 p-6 overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold tracking-wide text-white/80">Settings</h2>
+              <button onClick={() => setSettingsView('hidden')} className="text-white/60 hover:text-white"><X size={24} /></button>
             </div>
-            
-            <div className="p-6 overflow-y-auto space-y-8">
-              <div className="flex items-center justify-between bg-white/5 p-4 rounded-lg">
-                  <div>
-                      <h3 className="text-sm font-bold text-white/70 mb-1 flex items-center gap-2"><FolderOpen size={16}/> SESSION MANAGEMENT</h3>
-                      <p className="text-xs text-white/40">Images are saved to: {sessionName}</p>
-                  </div>
-                  <button onClick={handleExport} className="flex items-center gap-2 bg-green-600/20 hover:bg-green-600/40 text-green-200 px-4 py-2 rounded-lg transition-all text-sm"><Download size={16}/> EXPORT ZIP</button>
-              </div>
-              
-              <div className="bg-white/5 p-4 rounded-lg">
-                 <div className="flex justify-between mb-4">
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-purple-400"><Activity size={16}/> METRICS</h3>
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-green-400"><DollarSign size={16}/> ESTIMATED COST: ${cost.total?.toFixed(4)}</h3>
-                 </div>
-                 <div className="grid grid-cols-2 gap-6 text-xs font-mono">
-                    <div>
-                        <p className="text-white/50 border-b border-white/10 mb-2 pb-1">LATENCY (AVG)</p>
-                        {Object.entries(metrics).map(([k, v]) => (
-                            <div key={k} className="flex justify-between py-1"><span>{k}</span><span className="text-purple-300">{Number(v).toFixed(3)}s</span></div>
-                        ))}
-                    </div>
-                    <div>
-                        <p className="text-white/50 border-b border-white/10 mb-2 pb-1">COST BREAKDOWN</p>
-                        {Object.entries(cost.breakdown || {}).map(([k, v]) => (
-                            <div key={k} className="flex justify-between py-1"><span>{k}</span><span className="text-green-300">${Number(v).toFixed(4)}</span></div>
-                        ))}
-                    </div>
-                 </div>
-              </div>
-
-              <div className="flex items-center justify-between bg-white/5 p-4 rounded-lg">
+            <div className="space-y-6">
+              <div className="flex items-center gap-3 bg-white/5 p-3 rounded-lg border border-white/10">
+                <FolderOpen size={16} />
                 <div>
-                  <h3 className="text-sm font-bold text-white/70">DEBUG TRANSCRIPTS</h3>
-                  <p className="text-xs text-white/40">When enabled, backend can emit raw transcript snippets to the Debug panel.</p>
+                  <p className="text-xs text-white/50">Session</p>
+                  <p className="text-sm text-white">{sessionName}</p>
                 </div>
-                <label className="flex items-center gap-2 text-sm">
+                <button onClick={handleExport} className="ml-auto text-xs bg-green-500/20 hover:bg-green-500/40 text-green-200 px-3 py-1 rounded">Export</button>
+              </div>
+              <div className="bg-white/5 p-3 rounded-lg border border-white/10">
+                <div className="flex justify-between mb-3">
+                  <span className="text-xs text-white/50">API Keys</span>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder="Gemini API Key" className="w-full bg-black/50 border border-white/10 rounded p-2" />
+                  <input type="password" value={openRouterKey} onChange={e => setOpenRouterKey(e.target.value)} placeholder="OpenRouter API Key" className="w-full bg-black/50 border border-white/10 rounded p-2" />
+                  <input type="password" value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} placeholder="OpenAI API Key" className="w-full bg-black/50 border border-white/10 rounded p-2" />
+                </div>
+              </div>
+              <div className="bg-white/5 p-3 rounded-lg border border-white/10">
+                <div className="flex items-center justify-between mb-2 text-xs text-white/50">
+                  <span>Debug Transcripts</span>
                   <input type="checkbox" checked={showDebug} onChange={e => setShowDebug(e.target.checked)} />
-                  <span className="text-white/80">Enable</span>
-                </label>
+                </div>
+                <p className="text-[11px] text-white/40">When enabled, backend can emit raw transcript snippets to the Debug panel.</p>
               </div>
-
-              <div className="space-y-4">
-                <h3 className="text-sm font-bold text-white/70">API KEYS</h3>
-                <input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder="Gemini API Key" className="w-full bg-black/50 border border-white/10 rounded p-3" />
-                <input type="password" value={openRouterKey} onChange={e => setOpenRouterKey(e.target.value)} placeholder="OpenRouter API Key" className="w-full bg-black/50 border border-white/10 rounded p-3" />
-                <input type="password" value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} placeholder="OpenAI API Key" className="w-full bg-black/50 border border-white/10 rounded p-3" />
+              <div className="space-y-4 text-sm">
+                <div>
+                  <h3 className="text-white/70 text-xs mb-1">PHASE A: AUDIO</h3>
+                  <select value={audioModel} onChange={e => setAudioModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-2 text-xs">
+                    {AUDIO_MODELS.map(m => <option key={m.id} value={m.id}>{decorateAudioName(m.id, m.name)}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <h3 className="text-white/70 text-xs mb-1">PHASE B: QUESTIONS</h3>
+                  <select value={questionModel} onChange={e => setQuestionModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-2 text-xs">
+                    {QUESTION_MODELS.map(m => <option key={m.id} value={m.id}>{decorateQuestionName(m.id, m.name)}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <h3 className="text-white/70 text-xs mb-1">PHASE C: IMAGES</h3>
+                  <select value={imageModel} onChange={e => setImageModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-2 text-xs">
+                    {IMAGE_MODELS.map(m => <option key={m.id} value={m.id}>{decorateImageName(m.id, m.name)}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <h3 className="text-white/70 text-xs mb-1 flex items-center gap-1"><Clock size={14}/> Min Display Time: {minDisplayTime}s</h3>
+                  <input type="range" min="3" max="60" value={minDisplayTime} onChange={e => setMinDisplayTime(Number(e.target.value))} className="w-full accent-purple-500" />
+                </div>
               </div>
-
-              <div className="grid grid-cols-1 gap-6">
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-bold text-white/70">PHASE A: AUDIO PIPELINE</h3>
-                    <select value={audioModel} onChange={e => setAudioModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-3 text-sm">
-                      {AUDIO_MODELS.map(m => <option key={m.id} value={m.id}>{decorateAudioName(m.id, m.name)}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-bold text-white/70">PHASE B: QUESTION MODEL</h3>
-                    <select value={questionModel} onChange={e => setQuestionModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-3 text-sm">
-                      {QUESTION_MODELS.map(m => <option key={m.id} value={m.id}>{decorateQuestionName(m.id, m.name)}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-bold text-white/70">PHASE C: IMAGE GENERATOR</h3>
-                    <select value={imageModel} onChange={e => setImageModel(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded p-3 text-sm">
-                      {IMAGE_MODELS.map(m => <option key={m.id} value={m.id}>{decorateImageName(m.id, m.name)}</option>)}
-                    </select>
-                  </div>
+              <button onClick={handleSaveSettings} className="w-full bg-purple-600/30 hover:bg-purple-600/50 text-purple-50 py-2 rounded text-sm">Apply</button>
+            </div>
+          </div>
+          <div className="flex-1 bg-black/70 backdrop-blur-sm p-6 overflow-y-auto">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-xs text-white/60">Status</span>
+              <span className="text-xs text-white/60 flex items-center gap-1">Mic {statusDot(micStatus === 'granted' ? 'ok' : micStatus === 'unknown' ? 'warn' : 'err')}</span>
+              <span className="text-xs text-white/60 flex items-center gap-1">WS {statusDot(wsStatus === 'open' ? 'ok' : 'err')}</span>
+              <span className="text-xs text-white/60 flex items-center gap-1">Image {statusDot(imageStatus === 'generating' ? 'warn' : 'ok')}</span>
+            </div>
+            <div className="bg-white/5 p-4 rounded-lg border border-white/10 mb-6">
+              <div className="flex justify-between mb-3">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-purple-400"><Activity size={16}/> Metrics</h3>
+                <h3 className="flex items-center gap-2 text-sm font-bold text-green-400"><DollarSign size={16}/> Est. Cost: ${cost.total?.toFixed(4)}</h3>
               </div>
-              
-              <div className="space-y-2">
-                 <h3 className="text-sm font-bold text-white/70 flex items-center gap-2"><Clock size={16}/> MIN DISPLAY TIME: {minDisplayTime}s</h3>
-                 <input type="range" min="3" max="60" value={minDisplayTime} onChange={e => setMinDisplayTime(Number(e.target.value))} className="w-full accent-purple-500" />
+              <div className="grid grid-cols-2 gap-4 text-[11px] font-mono">
+                <div>
+                    <p className="text-white/50 border-b border-white/10 mb-2 pb-1">Latency (avg)</p>
+                    {Object.entries(metrics).map(([k, v]) => (
+                        <div key={k} className="flex justify-between py-1"><span>{k}</span><span className="text-purple-300">{Number(v).toFixed(3)}s</span></div>
+                    ))}
+                </div>
+                <div>
+                    <p className="text-white/50 border-b border-white/10 mb-2 pb-1">Cost breakdown</p>
+                    {Object.entries(cost.breakdown || {}).map(([k, v]) => (
+                        <div key={k} className="flex justify-between py-1"><span>{k}</span><span className="text-green-300">${Number(v).toFixed(4)}</span></div>
+                    ))}
+                </div>
               </div>
             </div>
-            
-            <div className="p-6 border-t border-white/10">
-              <button onClick={handleSaveSettings} className="w-full bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 p-4 rounded-lg font-medium transition-all">APPLY SETTINGS</button>
+            <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+              <h3 className="text-sm font-semibold text-white/80 mb-3">History</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                {history.map((item, idx) => (
+                  <div key={idx} className="bg-black/40 border border-white/10 rounded p-2 cursor-pointer" onClick={() => setViewIndex(idx)}>
+                    <div className="text-white/70 line-clamp-2 mb-1">{item.question}</div>
+                    <img src={item.url} className="w-full h-24 object-cover rounded" />
+                    <div className="text-white/30 mt-1">{item.timestamp}</div>
+                  </div>
+                ))}
+                {history.length === 0 && <div className="text-white/40">No images yet.</div>}
+              </div>
             </div>
           </div>
         </div>
