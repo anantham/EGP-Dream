@@ -47,7 +47,7 @@ export default function App() {
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('gemini_api_key') || '');
   const [openRouterKey, setOpenRouterKey] = useState(localStorage.getItem('openrouter_api_key') || '');
   const [openaiKey, setOpenaiKey] = useState(localStorage.getItem('openai_api_key') || '');
-  const [audioModel, setAudioModel] = useState('local_whisper');
+  const [audioModel, setAudioModel] = useState('openai_realtime_4o');
   const [questionModel, setQuestionModel] = useState('gemini-2.5-flash');
   const [imageModel, setImageModel] = useState('google/gemini-2.5-flash-image');
   const [minDisplayTime, setMinDisplayTime] = useState(6);

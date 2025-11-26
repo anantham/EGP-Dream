@@ -35,6 +35,6 @@ IMAGE_MODELS = {
     "stabilityai/stable-diffusion-3-medium": "SD3 Medium (OpenRouter)" 
 }
 
-DEFAULT_AUDIO_MODEL = "local_whisper"
+DEFAULT_AUDIO_MODEL = "openai_realtime_4o"
 DEFAULT_QUESTION_MODEL = "gemini-2.5-flash"
 DEFAULT_IMAGE_MODEL = "google/gemini-2.5-flash-image"
