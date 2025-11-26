@@ -11,6 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
 
+# Simple timestamped logger
+def log(msg: str):
+    print(f"[{datetime.now().isoformat()}] {msg}")
+
 # Compatibility shim: importlib.metadata on Python 3.9 lacks packages_distributions
 try:
     import importlib.metadata as _md
@@ -115,7 +119,7 @@ class ConnectionState:
             "openrouter_api_key": os.getenv("OPENROUTER_API_KEY"),
             "openai_api_key": os.getenv("OPENAI_API_KEY")
         }
-        print(f"[CONFIG] Loaded API keys from env: gemini={'set' if self.api_keys['gemini_api_key'] else 'missing'}, openrouter={'set' if self.api_keys['openrouter_api_key'] else 'missing'}, openai={'set' if self.api_keys['openai_api_key'] else 'missing'}")
+        log(f"[CONFIG] Loaded API keys from env: gemini={'set' if self.api_keys['gemini_api_key'] else 'missing'}, openrouter={'set' if self.api_keys['openrouter_api_key'] else 'missing'}, openai={'set' if self.api_keys['openai_api_key'] else 'missing'}")
         
         self.audio_processor = get_audio_processor(self.audio_model)
         self.audio_processor.set_question_model(self.question_model)
@@ -133,7 +137,7 @@ class ConnectionState:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("Client connected")
+    log("Client connected")
     
     # Instantiate State PER CONNECTION
     state = ConnectionState()
@@ -153,7 +157,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
                 
                 if state.debug:
-                    print(f"[AUDIO] Received chunk len={len(audio_np)} model={state.audio_model}")
+                    log(f"[AUDIO] Received chunk len={len(audio_np)} model={state.audio_model}")
                 questions_str = await state.audio_processor.process_audio(audio_np)
                 
                 if questions_str:
@@ -161,7 +165,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     for q in questions:
                         q = q.strip()
                         if q and q not in state.processed_questions:
-                            print(f"[QUESTION] New Question: {q}")
+                            log(f"[QUESTION] New Question: {q}")
                             state.processed_questions.add(q)
                             state.all_questions.append(q)
                             
@@ -174,6 +178,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         await websocket.send_json({"type": "debug_text", "text": getattr(state.audio_processor, "last_debug_text", "")})
 
             elif message['type'] == 'config':
+                log(f"[WS] Config message received: {message}")
                 await handle_config(message, state)
                 
             elif message['type'] == 'get_metrics':
@@ -217,13 +222,13 @@ async def websocket_endpoint(websocket: WebSocket):
 async def handle_config(message, state: ConnectionState):
     if 'geminiApiKey' in message: 
         state.api_keys['gemini_api_key'] = message['geminiApiKey']
-        print(f"[CONFIG] Gemini key set via config (length={len(message['geminiApiKey']) if message['geminiApiKey'] else 0})")
+        log(f"[CONFIG] Gemini key set via config (length={len(message['geminiApiKey']) if message['geminiApiKey'] else 0})")
     if 'openRouterApiKey' in message: 
         state.api_keys['openrouter_api_key'] = message['openRouterApiKey']
-        print(f"[CONFIG] OpenRouter key set via config (length={len(message['openRouterApiKey']) if message['openRouterApiKey'] else 0})")
+        log(f"[CONFIG] OpenRouter key set via config (length={len(message['openRouterApiKey']) if message['openRouterApiKey'] else 0})")
     if 'openaiApiKey' in message: 
         state.api_keys['openai_api_key'] = message['openaiApiKey']
-        print(f"[CONFIG] OpenAI key set via config (length={len(message['openaiApiKey']) if message['openaiApiKey'] else 0})")
+        log(f"[CONFIG] OpenAI key set via config (length={len(message['openaiApiKey']) if message['openaiApiKey'] else 0})")
     if 'debug' in message: state.debug = bool(message['debug'])
     
     # Logic to switch processors if model changed
@@ -235,21 +240,21 @@ async def handle_config(message, state: ConnectionState):
         state.audio_model = message['audioModel']
         state.audio_processor = get_audio_processor(state.audio_model)
         state.audio_processor.set_question_model(state.question_model)
-        print(f"[CONFIG] Switched Audio Model to {state.audio_model}")
+        log(f"[CONFIG] Switched Audio Model to {state.audio_model}")
 
     if 'questionModel' in message and message['questionModel'] != state.question_model:
         state.question_model = message['questionModel']
         state.audio_processor.set_question_model(state.question_model)
-        print(f"[CONFIG] Switched Question Model to {state.question_model}")
+        log(f"[CONFIG] Switched Question Model to {state.question_model}")
         
     if 'imageModel' in message and message['imageModel'] != state.image_model:
         state.image_model = message['imageModel']
         state.image_generator = get_image_generator(state.image_model)
-        print(f"[CONFIG] Switched Image Model to {state.image_model}")
+        log(f"[CONFIG] Switched Image Model to {state.image_model}")
 
     if 'minDisplayTime' in message:
         state.min_display_time = int(message['minDisplayTime'])
-        print(f"[CONFIG] min_display_time set to {state.min_display_time}")
+        log(f"[CONFIG] min_display_time set to {state.min_display_time}")
         
     if 'sessionName' in message:
         state.session.set_session_name(message['sessionName'])
