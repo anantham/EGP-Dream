@@ -64,6 +64,8 @@ export default function App() {
   const [metrics, setMetrics] = useState<Record<string, any>>({});
   const [cost, setCost] = useState<Record<string, any>>({ total: 0, breakdown: {} });
   const [debugText, setDebugText] = useState<string[]>([]);
+  const [sessionList, setSessionList] = useState<{name: string, modified: number}[]>([]);
+  const [loadedSession, setLoadedSession] = useState<string | null>(null);
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -107,6 +109,34 @@ export default function App() {
     wsRef.current = ws;
     return () => ws.close();
   }, []);
+
+  const fetchSessions = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/sessions');
+      const data = await res.json();
+      setSessionList(data);
+    } catch (e) {
+      console.error('Failed to load sessions', e);
+    }
+  };
+
+  const loadSession = async (name: string) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/session/${name}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setHistory(data.map((item: any) => ({
+          question: item.question || '',
+          url: item.url,
+          timestamp: item.timestamp || ''
+        })));
+        setViewIndex(-1);
+        setLoadedSession(name);
+      }
+    } catch (e) {
+      console.error('Failed to load session', e);
+    }
+  };
 
   // Keyboard Navigation
   useEffect(() => {
@@ -314,6 +344,18 @@ const startRecording = async () => {
                   <p className="text-sm text-white">{sessionName}</p>
                 </div>
                 <button onClick={handleExport} className="ml-auto text-xs bg-green-500/20 hover:bg-green-500/40 text-green-200 px-3 py-1 rounded">Export</button>
+              </div>
+              <div className="bg-white/5 p-3 rounded-lg border border-white/10">
+                <div className="flex items-center justify-between mb-2 text-xs text-white/50">
+                  <span>Load Past Session</span>
+                  <button onClick={fetchSessions} className="text-[11px] bg-white/10 px-2 py-1 rounded">Refresh</button>
+                </div>
+                <select className="w-full bg-black/50 border border-white/10 rounded p-2 text-xs" value={loadedSession || ''} onChange={e => e.target.value && loadSession(e.target.value)}>
+                  <option value="">Select session</option>
+                  {sessionList.map(s => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="bg-white/5 p-3 rounded-lg border border-white/10">
                 <div className="flex justify-between mb-3">
