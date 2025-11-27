@@ -162,10 +162,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 if state.debug:
                     log(f"[AUDIO] Received chunk len={len(audio_np)} model={state.audio_model}")
                 questions_str = await state.audio_processor.process_audio(audio_np)
+                log(f"[AUDIO] Processor returned raw: {questions_str}")
                 
                 if questions_str:
                     try:
                         parsed = json.loads(questions_str)
+                        log(f"[AUDIO] Parsed JSON: {parsed}")
                         if isinstance(parsed, list):
                             for item in parsed:
                                 q = (item.get("question") or "").strip() if isinstance(item, dict) else ""
@@ -332,11 +334,13 @@ async def display_manager(websocket: WebSocket, state: ConnectionState):
     while True:
         item = await state.display_queue.get()
         try:
+            log(f"[DISPLAY] Sending image prompt={item['prompt']} url_len={len(item['url'])}")
             await websocket.send_json({
                 "type": "image",
                 "url": item['url'],
                 "prompt": item['prompt']
             })
+            log(f"[DISPLAY] Sleeping for {state.min_display_time}s before next image")
             await asyncio.sleep(state.min_display_time)
         except Exception:
             break

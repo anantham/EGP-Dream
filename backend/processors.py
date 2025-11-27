@@ -301,6 +301,7 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                 "audio": pcm_base64
             }))
             self.last_debug_text = f"[REALTIME] Sent {duration:.2f}s chunk to {self.model_name}"
+            print(f"[REALTIME] Sent PCM chunk len={len(pcm_base64)} model={self.model_name}")
             collected = []
             while True:
                 try:
@@ -310,6 +311,7 @@ class OpenAIRealtimeProcessor(AudioProcessor):
                 except asyncio.QueueEmpty:
                     break
             if collected:
+                print(f"[REALTIME] Collected JSON from realtime: {collected}")
                 return json.dumps(collected)
             
         finally:

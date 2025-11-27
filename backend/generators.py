@@ -31,7 +31,10 @@ class GeminiImageGenerator(ImageGenerator):
                 prompt,
                 generation_config=genai.types.GenerationConfig(response_modalities=["IMAGE"])
             )
-            print(f"[IMAGE] Gemini response={response}")
+            try:
+                print(f"[IMAGE] Gemini response full={response}")
+            except Exception:
+                pass
             instrumentation.end_timer(start_time, "Phase C", model_name)
             
             if response.parts:
@@ -64,7 +67,12 @@ class OpenRouterImageGenerator(ImageGenerator):
                 prompt=prompt,
                 n=1, size="1024x1024", response_format="b64_json"
             )
-            print(f"[IMAGE] OpenRouter response={response}")
+            try:
+                print(f"[IMAGE] OpenRouter response full={response}")
+                if hasattr(response, 'model_dump_json'):
+                    print(f"[IMAGE] OpenRouter response json={response.model_dump_json()}")
+            except Exception:
+                pass
             instrumentation.end_timer(start_time, "Phase C", model_name)
             if response.data:
                 return f"data:image/png;base64,{response.data[0].b64_json}"
