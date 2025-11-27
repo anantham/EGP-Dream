@@ -32,7 +32,7 @@ class GeminiImageGenerator(ImageGenerator):
                 generation_config=genai.types.GenerationConfig(response_modalities=["IMAGE"])
             )
             try:
-                print(f"[IMAGE] Gemini response full={response}")
+                print(f"[IMAGE] Gemini response full={response}", flush=True)
             except Exception:
                 pass
             instrumentation.end_timer(start_time, "Phase C", model_name)
@@ -68,9 +68,9 @@ class OpenRouterImageGenerator(ImageGenerator):
                 n=1, size="1024x1024", response_format="b64_json"
             )
             try:
-                print(f"[IMAGE] OpenRouter response full={response}")
+                print(f"[IMAGE] OpenRouter response full={response}", flush=True)
                 if hasattr(response, 'model_dump_json'):
-                    print(f"[IMAGE] OpenRouter response json={response.model_dump_json()}")
+                    print(f"[IMAGE] OpenRouter response json={response.model_dump_json()}", flush=True)
             except Exception:
                 pass
             instrumentation.end_timer(start_time, "Phase C", model_name)

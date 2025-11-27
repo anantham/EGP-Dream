@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 # Simple timestamped logger
 def log(msg: str):
-    print(f"[{datetime.now().isoformat()}] {msg}")
+    print(f"[{datetime.now().isoformat()}] {msg}", flush=True)
 
 # Compatibility shim: importlib.metadata on Python 3.9 lacks packages_distributions
 try:

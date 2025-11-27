@@ -66,7 +66,7 @@ export default function App() {
   const [debugText, setDebugText] = useState<string[]>([]);
   const [sessionList, setSessionList] = useState<{name: string, modified: number}[]>([]);
   const [loadedSession, setLoadedSession] = useState<string | null>(null);
-  const appVersion = "v0.04";
+  const appVersion = "v0.05";
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -81,14 +81,16 @@ export default function App() {
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:8000/ws');
     ws.onopen = () => {
+      console.log('[WS] open');
       setWsStatus('open');
       setStatus('Connected');
       sendConfig(ws);
       setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'get_metrics' })); }, 5000);
     };
-    ws.onerror = () => setWsStatus('closed');
+    ws.onerror = (e) => { console.warn('[WS] error', e); setWsStatus('closed'); };
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      console.log('[WS] message', data);
       if (data.type === 'image') {
         setLiveImage(data.url);
         setLivePrompt(data.prompt);
@@ -106,7 +108,7 @@ export default function App() {
         setCost(data.data.cost || { total: 0, breakdown: {} });
       }
     };
-    ws.onclose = () => { setStatus('Disconnected'); setWsStatus('closed'); };
+    ws.onclose = () => { console.log('[WS] closed'); setStatus('Disconnected'); setWsStatus('closed'); };
     wsRef.current = ws;
     return () => ws.close();
   }, []);
@@ -163,6 +165,17 @@ export default function App() {
 
   const sendConfig = (wsInstance: WebSocket | null = wsRef.current) => {
     if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+      console.log('[WS] send config', {
+        audioModel,
+        questionModel,
+        imageModel,
+        minDisplayTime,
+        sessionName,
+        geminiKey: geminiKey ? 'set' : 'missing',
+        openRouterKey: openRouterKey ? 'set' : 'missing',
+        openaiKey: openaiKey ? 'set' : 'missing',
+        debug: showDebug
+      });
       wsInstance.send(JSON.stringify({
         type: 'config',
         geminiApiKey: geminiKey,
@@ -217,33 +230,42 @@ const statusDot = (state: 'ok' | 'warn' | 'err') => {
     setSettingsView('hidden');
   };
 
-const handleExport = () => window.open('http://localhost:8000/api/export', '_blank');
+  const handleExport = () => window.open('http://localhost:8000/api/export', '_blank');
 
-const startRecording = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    setMicStatus('granted');
-    streamRef.current = stream;
-    const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+  const startRecording = async () => {
+    console.log('[MIC] startRecording begin, current micStatus=', micStatus);
+    try {
+      console.log('[MIC] Requesting getUserMedia...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('[MIC] getUserMedia SUCCESS - permission granted');
+      setMicStatus('granted');
+      streamRef.current = stream;
+      const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
     audioContextRef.current = audioContext;
-    const source = audioContext.createMediaStreamSource(stream);
-    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      console.log('[MIC] AudioContext created, sampleRate=', SAMPLE_RATE);
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
+      console.log('[MIC] ScriptProcessor created, bufferSize=4096');
       processor.onaudioprocess = (e) => {
         if (!isRecording) return;
         const bytes = new Uint8Array(e.inputBuffer.getChannelData(0).buffer);
         let binary = '';
         for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        console.log('[MIC] sending chunk bytes', bytes.byteLength);
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ type: 'audio', data: window.btoa(binary) }));
+          console.log('[WS] sent audio chunk b64 len', window.btoa(binary).length);
         }
       };
-    source.connect(processor);
-    processor.connect(audioContext.destination);
-    setIsRecording(true);
-    setStatus('Listening...');
-  } catch (err) { console.error(err); setStatus('Mic Error'); setMicStatus('denied'); }
-};
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      console.log('[MIC] Audio pipeline connected');
+      setIsRecording(true);
+      console.log('[MIC] Recording started, status set to Listening...');
+      setStatus('Listening...');
+    } catch (err) { console.error('[MIC] error', err); setStatus('Mic Error'); setMicStatus('denied'); }
+  };
 
   const stopRecording = () => {
     if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null; }
@@ -253,7 +275,10 @@ const startRecording = async () => {
     setStatus('Paused');
   };
 
-  const toggleRecording = () => isRecording ? stopRecording() : startRecording();
+  const toggleRecording = () => {
+    console.log('[MIC] toggleRecording called, isRecording=', isRecording);
+    return isRecording ? stopRecording() : startRecording();
+  };
 
   return (
     <div className="relative w-full h-screen bg-black overflow-hidden text-white font-light select-none">
@@ -331,8 +356,9 @@ const startRecording = async () => {
       )}
 
       {settingsView === 'open' && (
-        <div data-testid="settings-overlay" className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex" style={{overflow: 'hidden'}}>
-          <div className="w-1/3 min-w-[320px] max-w-sm bg-neutral-950/90 border-r border-white/10 p-6 overflow-y-auto" style={{maxHeight: '100vh'}}>
+        <div data-testid="settings-overlay" className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-[95%] max-w-6xl h-[75vh] bg-neutral-950/90 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex">
+          <div className="w-1/3 min-w-[320px] max-w-sm bg-neutral-950/90 border-r border-white/10 p-6 overflow-y-auto" style={{maxHeight: '75vh'}}>
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-lg font-semibold tracking-wide text-white/80">Settings</h2>
@@ -405,7 +431,7 @@ const startRecording = async () => {
               <button onClick={handleSaveSettings} className="w-full bg-purple-600/30 hover:bg-purple-600/50 text-purple-50 py-2 rounded text-sm">Apply</button>
             </div>
           </div>
-          <div className="flex-1 bg-black/70 backdrop-blur-sm p-6 overflow-y-auto" style={{maxHeight: '100vh'}}>
+          <div className="flex-1 bg-black/70 backdrop-blur-sm p-6 overflow-y-auto" style={{maxHeight: '75vh'}}>
             <div className="flex items-center gap-3 mb-6">
               <span className="text-xs text-white/60">Status</span>
               <span className="text-xs text-white/60 flex items-center gap-1">Mic {statusDot(micStatus === 'granted' ? 'ok' : micStatus === 'unknown' ? 'warn' : 'err')}</span>
@@ -446,6 +472,7 @@ const startRecording = async () => {
               </div>
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>

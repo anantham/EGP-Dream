@@ -12,9 +12,11 @@ describe('Settings overlay', () => {
     const settingsButton = screen.getByTestId('settings-button')
     fireEvent.click(settingsButton)
 
-    expect(await screen.findByTestId('settings-overlay')).toBeInTheDocument()
+    const overlay = await screen.findByTestId('settings-overlay')
+    expect(overlay).toBeInTheDocument()
+    expect(overlay).toBeVisible()
     expect(await screen.findByText(/Settings/i)).toBeInTheDocument()
-    expect(screen.getByText(/Version v0.03/i)).toBeInTheDocument()
+    expect(screen.getByText(/Version v0.05/i)).toBeInTheDocument()
     // Key inputs visible
     expect(screen.getByPlaceholderText(/Gemini API Key/i)).toBeInTheDocument()
     // History/gallery area visible
