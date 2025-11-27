@@ -66,7 +66,7 @@ export default function App() {
   const [debugText, setDebugText] = useState<string[]>([]);
   const [sessionList, setSessionList] = useState<{name: string, modified: number}[]>([]);
   const [loadedSession, setLoadedSession] = useState<string | null>(null);
-  const appVersion = "v0.03";
+  const appVersion = "v0.04";
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -300,7 +300,7 @@ const startRecording = async () => {
 
       <div className="absolute bottom-8 right-8 z-50 flex gap-4">
         <button onClick={() => setShowQuestions(!showQuestions)} className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/10 hover:opacity-100 opacity-40 hover:scale-105"><List size={32} /></button>
-        <button onClick={() => setSettingsView('open')} className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/10 hover:opacity-100 opacity-40 hover:scale-105"><SettingsIcon size={32} /></button>
+        <button data-testid="settings-button" onClick={() => setSettingsView('open')} className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/10 hover:opacity-100 opacity-40 hover:scale-105"><SettingsIcon size={32} /></button>
       </div>
 
       {/* Questions History Sidebar */}
@@ -331,7 +331,7 @@ const startRecording = async () => {
       )}
 
       {settingsView === 'open' && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex" style={{overflow: 'hidden'}}>
+        <div data-testid="settings-overlay" className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex" style={{overflow: 'hidden'}}>
           <div className="w-1/3 min-w-[320px] max-w-sm bg-neutral-950/90 border-r border-white/10 p-6 overflow-y-auto" style={{maxHeight: '100vh'}}>
             <div className="flex items-center justify-between mb-6">
               <div>
