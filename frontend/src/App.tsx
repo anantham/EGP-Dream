@@ -331,8 +331,8 @@ const startRecording = async () => {
       )}
 
       {settingsView === 'open' && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex">
-          <div className="w-1/3 min-w-[320px] max-w-sm bg-neutral-950/90 border-r border-white/10 p-6 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex" style={{overflow: 'hidden'}}>
+          <div className="w-1/3 min-w-[320px] max-w-sm bg-neutral-950/90 border-r border-white/10 p-6 overflow-y-auto" style={{maxHeight: '100vh'}}>
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-lg font-semibold tracking-wide text-white/80">Settings</h2>
@@ -405,7 +405,7 @@ const startRecording = async () => {
               <button onClick={handleSaveSettings} className="w-full bg-purple-600/30 hover:bg-purple-600/50 text-purple-50 py-2 rounded text-sm">Apply</button>
             </div>
           </div>
-          <div className="flex-1 bg-black/70 backdrop-blur-sm p-6 overflow-y-auto">
+          <div className="flex-1 bg-black/70 backdrop-blur-sm p-6 overflow-y-auto" style={{maxHeight: '100vh'}}>
             <div className="flex items-center gap-3 mb-6">
               <span className="text-xs text-white/60">Status</span>
               <span className="text-xs text-white/60 flex items-center gap-1">Mic {statusDot(micStatus === 'granted' ? 'ok' : micStatus === 'unknown' ? 'warn' : 'err')}</span>
