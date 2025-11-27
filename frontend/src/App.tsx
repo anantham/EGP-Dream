@@ -66,7 +66,7 @@ export default function App() {
   const [debugText, setDebugText] = useState<string[]>([]);
   const [sessionList, setSessionList] = useState<{name: string, modified: number}[]>([]);
   const [loadedSession, setLoadedSession] = useState<string | null>(null);
-  const appVersion = "v0.02";
+  const appVersion = "v0.03";
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
