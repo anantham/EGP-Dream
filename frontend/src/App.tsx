@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, Pause, Settings as SettingsIcon, X, List, Activity, Clock, Download, FolderOpen, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const SAMPLE_RATE = 16000;
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const WS_URL = import.meta.env.VITE_WS_URL ?? `${API_BASE.replace(/^http/, 'ws')}/ws`;
 
 const AUDIO_MODELS = [
   { id: "local_whisper", name: "Local Whisper (TheWhisper) - Streaming (low latency)" },
@@ -79,7 +81,7 @@ export default function App() {
   const displayPrompt = isLive ? livePrompt : history[viewIndex]?.question;
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws');
+    const ws = new WebSocket(WS_URL);
     ws.onopen = () => {
       console.log('[WS] open');
       setWsStatus('open');
@@ -115,7 +117,7 @@ export default function App() {
 
   const fetchSessions = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/sessions');
+      const res = await fetch(`${API_BASE}/api/sessions`);
       const data = await res.json();
       setSessionList(data);
     } catch (e) {
@@ -125,7 +127,7 @@ export default function App() {
 
   const loadSession = async (name: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/session/${name}`);
+      const res = await fetch(`${API_BASE}/api/session/${name}`);
       const data = await res.json();
       if (Array.isArray(data)) {
         setHistory(data.map((item: any) => ({
@@ -230,7 +232,7 @@ const statusDot = (state: 'ok' | 'warn' | 'err') => {
     setSettingsView('hidden');
   };
 
-  const handleExport = () => window.open('http://localhost:8000/api/export', '_blank');
+  const handleExport = () => window.open(`${API_BASE}/api/export`, '_blank');
 
   const startRecording = async () => {
     console.log('[MIC] startRecording begin, current micStatus=', micStatus);
@@ -356,9 +358,10 @@ const statusDot = (state: 'ok' | 'warn' | 'err') => {
       )}
 
       {settingsView === 'open' && (
-        <div data-testid="settings-overlay" className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="w-[95%] max-w-6xl h-[75vh] bg-neutral-950/90 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex">
-          <div className="w-1/3 min-w-[320px] max-w-sm bg-neutral-950/90 border-r border-white/10 p-6 overflow-y-auto" style={{maxHeight: '75vh'}}>
+        <div data-testid="settings-overlay" className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 overflow-y-auto p-4">
+          <div className="min-h-full flex items-center justify-center">
+          <div className="w-full max-w-6xl bg-neutral-950/90 border border-white/10 rounded-2xl shadow-2xl flex flex-col md:flex-row max-h-[90vh] md:max-h-[85vh]">
+          <div className="w-full md:w-1/3 md:min-w-[320px] md:max-w-sm bg-neutral-950/90 md:border-r border-b md:border-b-0 border-white/10 p-6 overflow-y-auto flex-shrink-0">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-lg font-semibold tracking-wide text-white/80">Settings</h2>
@@ -431,7 +434,7 @@ const statusDot = (state: 'ok' | 'warn' | 'err') => {
               <button onClick={handleSaveSettings} className="w-full bg-purple-600/30 hover:bg-purple-600/50 text-purple-50 py-2 rounded text-sm">Apply</button>
             </div>
           </div>
-          <div className="flex-1 bg-black/70 backdrop-blur-sm p-6 overflow-y-auto" style={{maxHeight: '75vh'}}>
+          <div className="flex-1 bg-black/70 backdrop-blur-sm p-6 overflow-y-auto min-h-0">
             <div className="flex items-center gap-3 mb-6">
               <span className="text-xs text-white/60">Status</span>
               <span className="text-xs text-white/60 flex items-center gap-1">Mic {statusDot(micStatus === 'granted' ? 'ok' : micStatus === 'unknown' ? 'warn' : 'err')}</span>
@@ -471,6 +474,7 @@ const statusDot = (state: 'ok' | 'warn' | 'err') => {
                 {history.length === 0 && <div className="text-white/40">No images yet.</div>}
               </div>
             </div>
+          </div>
           </div>
         </div>
         </div>

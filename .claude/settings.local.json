@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(npm run test)",
+      "Bash(npx tsc:*)",
+      "Bash(cat:*)",
+      "Bash(npx eslint:*)",
+      "Bash(pkill:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

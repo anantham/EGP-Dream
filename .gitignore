@@ -36,4 +36,5 @@ backend/metrics.json
 # IDEs
 .vscode/
 .idea/
-.DS_Store
+.DS_Store.claude/
+backend.log
